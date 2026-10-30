@@ -1,10 +1,12 @@
-// 공격대 작전판: 화면, 명단, 지도 배치, 발표 모드
+// 브리핑 포에버: 화면, 명단, 지도 배치, 발표 모드
 (function () {
   'use strict';
   const RP = window.RP;
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const tr = (k, v) => RP.t(k, v); // 한국어 문장을 열쇠로 현재 언어 문장을 돌려줌 (js/i18n.js)
+  const LONG_PRESS_MS = 500; // 공대원을 이만큼 누르고 있으면 공격·탱·힐·차단 메뉴
   const clone = v => (v === null || v === undefined) ? null : JSON.parse(JSON.stringify(v));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const round = v => Math.round(v * 10000) / 10000;
@@ -41,6 +43,31 @@
   let peers = [];
   let drag = null; // 지도 위 토큰을 끄는 중
   let fxReady = false; // 이펙트 층이 한 번이라도 그려졌는지 (확대·축소 때 다시 그리기용)
+  let lastStatus = null; // 언어를 바꿀 때 연결 상태 문구를 다시 쓰기 위해
+
+  // ---------- 시작 화면 ----------
+  // 안내 글을 읽을 시간을 주고(최소 3.5초), 불러오기가 끝나면 사라짐. 끝난 뒤에는 눌러서 바로 닫기
+  const splash = $('#splash');
+  const splashStart = Date.now();
+  let splashOpen = !!splash;
+  let namePromptPending = false;
+  function hideSplash() {
+    if (!splashOpen) return;
+    splashOpen = false;
+    splash.classList.add('out');
+    setTimeout(() => splash.remove(), 450);
+    if (namePromptPending) { namePromptPending = false; promptNameOnce(); }
+  }
+  function splashReady() {
+    if (!splashOpen) return;
+    $('#splashStatus').textContent = tr('화면을 누르면 시작합니다');
+    splash.classList.add('ready');
+    setTimeout(hideSplash, Math.max(0, 3500 - (Date.now() - splashStart)));
+  }
+  if (splash) {
+    splash.addEventListener('click', () => { if (ready) hideSplash(); });
+    setTimeout(hideSplash, 12000); // 연결이 오래 걸려도 화면은 보이게
+  }
   const view = { bossId: null, phaseId: null, follow: true, zoom: 1, panX: 0, panY: 0, pingMode: false, tool: 'select', linking: null };
   const getIn = (obj, path) => path.reduce((o, k) => (o && typeof o === 'object') ? o[k] : undefined, obj);
 
@@ -69,6 +96,7 @@
       state = s || {};
       if (drag && drag.moved && !drag.out) RP.applyOp(state, drag.path, clone(drag.value));
       ready = true;
+      splashReady();
       if (!namePromptQueued) { namePromptQueued = true; setTimeout(promptNameOnce, 500); }
       scheduleRender();
     },
@@ -77,9 +105,10 @@
       RP.applyOp(state, p, clone(v));
       scheduleRender();
     },
-    onStatus(kind, text) {
+    onStatus(kind, text, vars) {
+      lastStatus = [kind, text, vars];
       $('#connDot').className = 'dot ' + kind;
-      $('#connText').textContent = text;
+      $('#connText').textContent = tr(text, vars);
       if (kind === 'local') { peers = []; renderPeers(); }
     },
     onPeers(ps) { peers = Array.isArray(ps) ? ps : []; renderPeers(); scheduleRender(); },
@@ -167,7 +196,7 @@
     const pr = state.present;
     if (presentOn() && pr.clientId !== me.id && view.follow) {
       view.follow = false;
-      toast('발표자 따라가기를 껐습니다');
+      toast(tr('발표자 따라가기를 껐습니다'));
     }
     view.bossId = bossId;
     view.phaseId = phaseId || null;
@@ -181,14 +210,14 @@
     const input = $('#planTitle');
     if (document.activeElement !== input) input.value = title;
     input.disabled = VIEW_ONLY;
-    document.title = title ? `${title} · 공격대 작전판` : '공격대 작전판';
+    document.title = title ? `${title} · ${tr('브리핑 포에버')}` : tr('브리핑 포에버');
   }
 
   function renderPeers() {
     const btn = $('#peersBtn');
     btn.hidden = !peers.length;
     if (!peers.length) { closePeerPanel(); return; }
-    $('#peers').textContent = `접속 ${peers.length}명`;
+    $('#peers').textContent = tr('접속 {n}명', { n: peers.length });
     if (!$('#peerPanel').hidden) renderPeerPanel();
   }
 
@@ -202,15 +231,15 @@
     })).sort((a, b) => (b.me - a.me) || (b.presenter - a.presenter) || (!a.name - !b.name) || a.name.localeCompare(b.name, 'ko'));
     const unnamed = rows.filter(r => !r.name).length;
     $('#peerPanel').innerHTML =
-      `<div class="pp-head">접속 중 <b>${rows.length}</b>명${unnamed ? ` <span class="muted">· 이름 없음 ${unnamed}</span>` : ''}</div>` +
+      `<div class="pp-head">${tr('접속 중 <b>{n}</b>명', { n: rows.length })}${unnamed ? ` <span class="muted">· ${tr('이름 없음 {n}', { n: unnamed })}</span>` : ''}</div>` +
       '<ul class="pp-list">' + rows.map(r =>
         `<li><span class="pp-dot" style="background:${r.color}"></span>` +
-        `<span class="pp-name${r.name ? '' : ' muted'}">${r.name ? esc(r.name) : '이름 없음'}</span>` +
-        (r.me ? '<span class="pp-tag me">나</span>' : '') +
-        (r.presenter ? '<span class="pp-tag">발표 중</span>' : '') +
-        (r.name && rosterNames.has(normName(r.name)) ? '<span class="pp-tag ok" title="공대 명단에 있는 이름">명단</span>' : '') +
+        `<span class="pp-name${r.name ? '' : ' muted'}">${r.name ? esc(r.name) : tr('이름 없음')}</span>` +
+        (r.me ? `<span class="pp-tag me">${tr('나')}</span>` : '') +
+        (r.presenter ? `<span class="pp-tag">${tr('발표 중')}</span>` : '') +
+        (r.name && rosterNames.has(normName(r.name)) ? `<span class="pp-tag ok" title="${tr('공대 명단에 있는 이름')}">${tr('명단')}</span>` : '') +
         '</li>').join('') + '</ul>' +
-      `<button class="btn small" id="ppRename" type="button">${me.name ? '내 이름 바꾸기' : '내 이름 넣기'}</button>`;
+      `<button class="btn small" id="ppRename" type="button">${me.name ? tr('내 이름 바꾸기') : tr('내 이름 넣기')}</button>`;
   }
   function closePeerPanel() {
     $('#peerPanel').hidden = true;
@@ -240,7 +269,7 @@
     const pr = state.present;
     const bn = $('#presentBanner');
     const btn = $('#presentBtn');
-    btn.textContent = presenting() ? '발표 종료' : '발표 시작';
+    btn.textContent = presenting() ? tr('발표 종료') : tr('발표 시작');
     btn.classList.toggle('gold', !presenting());
     const sig = JSON.stringify([pr, view.follow, me.id, presentOn()]);
     if (!changed('banner', sig)) return;
@@ -248,13 +277,13 @@
     bn.hidden = false;
     if (pr.clientId === me.id) {
       bn.className = 'banner me';
-      bn.innerHTML = '<span>📢 발표 중입니다. 내가 보는 보스·단계를 모두가 따라봅니다.</span><button class="btn small" data-act="stop">발표 종료</button>';
+      bn.innerHTML = `<span>📢 ${tr('발표 중입니다. 내가 보는 보스·단계를 모두가 따라봅니다.')}</span><button class="btn small" data-act="stop">${tr('발표 종료')}</button>`;
     } else {
       bn.className = 'banner';
-      const who = esc(pr.name || '공대장');
+      const who = esc(pr.name || tr('공대장'));
       bn.innerHTML = view.follow
-        ? `<span>📢 <b>${who}</b>님이 발표 중 · 따라가는 중</span><button class="btn small" data-act="unfollow">따라가기 끄기</button>`
-        : `<span>📢 <b>${who}</b>님이 발표 중</span><button class="btn small gold" data-act="follow">발표자 화면으로</button>`;
+        ? `<span>📢 ${tr('<b>{who}</b>님이 발표 중 · 따라가는 중', { who })}</span><button class="btn small" data-act="unfollow">${tr('따라가기 끄기')}</button>`
+        : `<span>📢 ${tr('<b>{who}</b>님이 발표 중', { who })}</span><button class="btn small gold" data-act="follow">${tr('발표자 화면으로')}</button>`;
     }
   }
 
@@ -264,26 +293,26 @@
     const online = onlineNames();
     const sig = JSON.stringify([state.roster, Object.keys(toks).filter(k => k.startsWith('m_')).sort(), [...online].sort()]);
     if (!changed('roster', sig)) return;
-    $('#rosterCount').textContent = members.length ? `${members.length}명` : '';
+    $('#rosterCount').textContent = members.length ? tr('{n}명', { n: members.length }) : '';
     $('#roleCounts').innerHTML = RP.ROLES.map(r =>
-      `<span>${r.short} <b>${members.filter(m => m.role === r.id).length}</b></span>`).join('');
+      `<span>${RP.short(r)} <b>${members.filter(m => m.role === r.id).length}</b></span>`).join('');
     if (!members.length) {
-      $('#rosterList').innerHTML = VIEW_ONLY ? '<p class="hint">명단이 비어 있습니다.</p>'
-        : '<p class="hint">위에서 공대원을 추가하거나 <b>일괄 입력</b>으로 한 번에 넣으세요.</p>';
+      $('#rosterList').innerHTML = '<p class="hint">' + (VIEW_ONLY ? tr('명단이 비어 있습니다.')
+        : tr('위에서 공대원을 추가하거나 <b>일괄 입력</b>으로 한 번에 넣으세요.')) + '</p>';
       return;
     }
     $('#rosterList').innerHTML = RP.ROLES.map(r => {
       const ms = members.filter(m => (RP.roleById(m.role).id) === r.id);
       if (!ms.length) return '';
-      return `<div class="role-group"><h4><span>${r.name}</span><span>${ms.length}</span></h4>` + ms.map(m => {
+      return `<div class="role-group"><h4><span>${RP.nm(r)}</span><span>${ms.length}</span></h4>` + ms.map(m => {
         const c = RP.classById(m.cls);
         const placed = !!toks['m_' + m.id];
         const on = online.has(normName(m.name));
-        return `<div class="member${placed ? ' placed' : ''}${on ? ' online' : ''}" data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(c.name)}${on ? ' · 접속 중' : ''}">` +
+        return `<div class="member${placed ? ' placed' : ''}${on ? ' online' : ''}" data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(RP.nm(c))}${on ? ' · ' + tr('접속 중') : ''}">` +
           `<span class="chip" style="background:${c.color}"></span>` +
-          `<span class="m-name">${esc(m.name)}</span><span class="m-cls">${esc(c.name)}</span>` +
+          `<span class="m-name">${esc(m.name)}</span><span class="m-cls">${esc(RP.nm(c))}</span>` +
           `<span class="m-placed">${placed ? '✓' : ''}</span>` +
-          (VIEW_ONLY ? '' : `<button class="m-edit" data-edit="${esc(m.id)}" title="수정">✎</button>`) +
+          (VIEW_ONLY ? '' : `<button class="m-edit" data-edit="${esc(m.id)}" title="${tr('수정')}">✎</button>`) +
           '</div>';
       }).join('') + '</div>';
     }).join('');
@@ -295,7 +324,7 @@
     if (!changed('bossTabs', sig)) return;
     $('#bossTabs').innerHTML = bs.map((b, i) =>
       `<button class="tab${b.id === view.bossId ? ' active' : ''}" data-boss="${esc(b.id)}"><span class="num">${i + 1}</span>${esc(b.name)}</button>`
-    ).join('') + (VIEW_ONLY || !bs.length ? '' : '<button class="tab add" data-add-boss>+ 보스</button>');
+    ).join('') + (VIEW_ONLY || !bs.length ? '' : `<button class="tab add" data-add-boss>+ ${tr('보스')}</button>`);
   }
 
   function renderPhaseTabs() {
@@ -304,7 +333,7 @@
     if (!changed('phaseTabs', sig)) return;
     $('#phaseTabs').innerHTML = ps.map(p =>
       `<button class="tab${p.id === view.phaseId ? ' active' : ''}" data-phase="${esc(p.id)}">${esc(p.name)}</button>`
-    ).join('') + (VIEW_ONLY || !ps.length ? '' : '<button class="tab add" data-add-phase title="현재 배치를 복사해서 새 단계를 만듭니다">+ 단계</button>');
+    ).join('') + (VIEW_ONLY || !ps.length ? '' : `<button class="tab add" data-add-phase title="${tr('현재 배치를 복사해서 새 단계를 만듭니다')}">+ ${tr('단계')}</button>`);
   }
 
   function renderPalette() {
@@ -313,11 +342,11 @@
     if (!changed('palette', sig)) return;
     $('#palette').innerHTML =
       RP.MARKERS.map(m =>
-        `<div class="pal-item${toks['k_' + m.id] ? ' used' : ''}" data-kind="marker" data-id="${m.id}" title="${m.name} 징표 · 클릭하거나 지도로 끌어다 놓기">${RP.markerSVG(m.id)}</div>`
+        `<div class="pal-item${toks['k_' + m.id] ? ' used' : ''}" data-kind="marker" data-id="${m.id}" title="${tr('{name} 징표 · 클릭하거나 지도로 끌어다 놓기', { name: RP.nm(m) })}">${RP.markerSVG(m.id)}</div>`
       ).join('') +
       '<span class="pal-sep"></span>' +
-      '<div class="pal-item boss" data-kind="boss" title="보스 · 클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에">보스</div>' +
-      '<div class="pal-item add" data-kind="add" title="쫄 · 클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에">쫄</div>';
+      `<div class="pal-item boss" data-kind="boss" title="${tr('보스')} · ${tr('클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에')}">${tr('보스')}</div>` +
+      `<div class="pal-item add" data-kind="add" title="${tr('쫄')} · ${tr('클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에')}">${tr('쫄')}</div>`;
   }
 
   // ---------- 지도 ----------
@@ -358,7 +387,7 @@
   });
   mapImg.addEventListener('error', () => {
     if (mapImg.src === FALLBACK) return;
-    toast('지형 이미지를 불러오지 못했습니다. 주소를 확인하세요');
+    toast(tr('지형 이미지를 불러오지 못했습니다. 주소를 확인하세요'));
     mapImg.src = FALLBACK;
   });
 
@@ -424,19 +453,19 @@
       if (!m) return null;
       const c = RP.classById(m.cls), r = RP.roleById(m.role);
       return {
-        cls: 'member', member: t.ref, title: `${m.name} · ${c.name} · ${r.name}`,
-        html: `<div class="disc" style="background:${c.color}">${r.short}</div><div class="label">${esc(m.name)}</div>`
+        cls: 'member', member: t.ref, title: `${m.name} · ${RP.nm(c)} · ${RP.nm(r)}`,
+        html: `<div class="disc" style="background:${c.color}">${RP.short(r)}</div><div class="label">${esc(m.name)}</div>`
       };
     }
     if (t.type === 'marker') {
       const mk = RP.MARKERS.find(x => x.id === Number(t.ref));
       if (!mk) return null;
-      return { cls: 'marker', title: mk.name + ' 징표', html: `<div class="disc">${RP.markerSVG(mk.id)}</div>` };
+      return { cls: 'marker', title: tr('{name} 징표', { name: RP.nm(mk) }), html: `<div class="disc">${RP.markerSVG(mk.id)}</div>` };
     }
     if (t.type === 'boss' || t.type === 'add') {
-      const def = t.type === 'boss' ? '보스' : '쫄';
+      const def = t.type === 'boss' ? tr('보스') : tr('쫄');
       const label = t.label && t.label !== def ? `<div class="label">${esc(t.label)}</div>` : '';
-      return { cls: t.type, title: (t.label || def) + ' · 클릭해서 이름 바꾸기', html: `<div class="disc">${def}</div>${label}` };
+      return { cls: t.type, title: (t.label || def) + ' · ' + tr('클릭해서 이름 바꾸기'), html: `<div class="disc">${def}</div>${label}` };
     }
     if (t.type === 'text') {
       const col = validColor(t.color) ? t.color : '#ffffff';
@@ -535,7 +564,7 @@
         if (!drag || drag.id !== id || drag.moved) return;
         stopTokenDrag();
         openActionMenu(id);
-      }, 2000);
+      }, LONG_PRESS_MS);
       scheduleRender();
     }
   });
@@ -577,7 +606,7 @@
     const d = stopTokenDrag();
     if (!d) return;
     if (d.moved && e.type !== 'pointercancel') {
-      if (d.out) { commit(removeTokenOps(d.path.slice(0, 4), d.id)); toast('배치를 해제했습니다'); }
+      if (d.out) { commit(removeTokenOps(d.path.slice(0, 4), d.id)); toast(tr('배치를 해제했습니다')); }
       else set(d.path, d.value);
     } else if (!d.moved && e.type !== 'pointercancel') {
       renameToken(d.path);
@@ -589,12 +618,12 @@
   async function renameToken(path) {
     const t = getIn(state, path);
     if (!t || !['boss', 'add', 'text'].includes(t.type)) return;
-    const title = t.type === 'boss' ? '보스 이름' : t.type === 'add' ? '쫄 이름' : '지도에 쓸 글자';
+    const title = t.type === 'boss' ? tr('보스 이름') : t.type === 'add' ? tr('쫄 이름') : tr('지도에 쓸 글자');
     const label = await ask({ title, value: t.label || '' });
     if (label === null || !getIn(state, path)) return;
     const v = label.trim().slice(0, 40);
     if (!v && t.type === 'text') set(path, null);
-    else if (!v) set(path.concat('label'), (t.type === 'boss' ? '보스 ' : '쫄 ') + (t.n || 1));
+    else if (!v) set(path.concat('label'), tr(t.type === 'boss' ? '보스 {n}' : '쫄 {n}', { n: t.n || 1 }));
     else set(path.concat('label'), v);
   }
   // 우클릭으로 삭제 (휴대폰에서 길게 눌렀을 때 뜨는 메뉴로 지워지지 않게 마우스일 때만)
@@ -802,7 +831,7 @@
 
   async function placeText(pt) {
     const path = [...phasePath(), 'tokens', 'x_' + RP.uid(6)];
-    const label = await ask({ title: '지도에 쓸 글자', value: '' });
+    const label = await ask({ title: tr('지도에 쓸 글자'), value: '' });
     if (!label || !label.trim()) return;
     set(path, { type: 'text', label: label.trim().slice(0, 40), color: draw.color, x: round(clamp(pt.x, 0, 1)), y: round(clamp(pt.y, 0, 1)) });
     myShapes.push(path);
@@ -814,7 +843,7 @@
       const p = myShapes.pop();
       if (getIn(state, p)) { set(p, null); return; }
     }
-    toast('되돌릴 그림이 없습니다');
+    toast(tr('되돌릴 그림이 없습니다'));
   }
 
   function setTool(id) {
@@ -841,12 +870,15 @@
     renderDrawbar();
   }
 
-  $('#toolBtns').innerHTML = TOOLS.map(t =>
-    `<button class="tbtn" data-tool="${t.id}" title="${t.name}"><svg viewBox="0 0 24 24">${t.icon}</svg></button>`).join('');
-  $('#colorBtns').innerHTML = PAINT_COLORS.map(c =>
-    `<button class="swatch" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('');
-  $('#widthBtns').innerHTML = WIDTHS.map((w, i) =>
-    `<button class="tbtn" data-w="${w}" title="${['가늘게', '보통', '굵게'][i]}"><span class="width-line" style="height:${[2, 4, 7][i]}px"></span></button>`).join('');
+  function buildDrawbar() {
+    $('#toolBtns').innerHTML = TOOLS.map(t =>
+      `<button class="tbtn" data-tool="${t.id}" title="${tr(t.name)}"><svg viewBox="0 0 24 24">${t.icon}</svg></button>`).join('');
+    $('#colorBtns').innerHTML = PAINT_COLORS.map(c =>
+      `<button class="swatch" data-color="${c}" style="background:${c}" title="${c}"></button>`).join('');
+    $('#widthBtns').innerHTML = WIDTHS.map((w, i) =>
+      `<button class="tbtn" data-w="${w}" title="${tr(['가늘게', '보통', '굵게'][i])}"><span class="width-line" style="height:${[2, 4, 7][i]}px"></span></button>`).join('');
+  }
+  buildDrawbar();
   $('#toolBtns').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
   $('#colorBtns').addEventListener('click', e => {
     const b = e.target.closest('[data-color]');
@@ -862,9 +894,9 @@
   $('#undoBtn').onclick = undo;
   $('#clearDrawBtn').onclick = () => {
     const p = phase();
-    if (!p || !p.draw) return toast('지울 그림이 없습니다');
+    if (!p || !p.draw) return toast(tr('지울 그림이 없습니다'));
     const path = [...phasePath(), 'draw'];
-    ask({ title: '이 단계의 그림을 모두 지울까요?', message: '공대원과 징표 배치는 그대로 둡니다.', ok: '지우기', danger: true })
+    ask({ title: tr('이 단계의 그림을 모두 지울까요?'), message: tr('공대원과 징표 배치는 그대로 둡니다.'), ok: tr('지우기'), danger: true })
       .then(ok => { if (ok) set(path, null); });
   };
   setTool('select');
@@ -881,7 +913,8 @@
   const fxPreview = $('#fxPreview');
   const SVGNS = 'http://www.w3.org/2000/svg';
   const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const KIND_NAME = { attack: '공격', tank: '탱', heal: '힐', interrupt: '차단' };
+  const KIND_KO = { attack: '공격', tank: '탱', heal: '힐', interrupt: '차단' };
+  const kindName = k => tr(KIND_KO[k] || '');
   const HEAL_COLOR = '#5cf08a', TANK_COLOR = '#ffb347', KICK_COLOR = '#b9a0ff';
   const linkId = (kind, from) => (kind === 'interrupt' ? 'i_' : 'l_') + from;
   const fxEls = new Map();
@@ -1028,13 +1061,13 @@
     menuFor = tokenId;
     const links = linksOf(phase());
     const cur = links['l_' + tokenId], kick = links['i_' + tokenId];
-    const now = [cur && KIND_NAME[cur.kind], kick && `차단 ${kick.n || 1}번`].filter(Boolean).join(' · ');
-    const btn = (act, label, off) => `<button type="button" role="menuitem" data-act="${act}"${off ? ' disabled title="해제할 행동이 없습니다"' : ''}>` +
+    const now = [cur && kindName(cur.kind), kick && tr('차단 {n}번', { n: kick.n || 1 })].filter(Boolean).join(' · ');
+    const btn = (act, label, off) => `<button type="button" role="menuitem" data-act="${act}"${off ? ` disabled title="${tr('해제할 행동이 없습니다')}"` : ''}>` +
       `<svg viewBox="0 0 24 24">${ACT_ICON[act]}</svg><span>${label}</span></button>`;
     const menu = $('#actionMenu');
-    menu.innerHTML = `<div class="am-title"><b>${esc(m.name)}</b>${now ? ` · 지금: ${now}` : ''}</div>` +
-      '<div class="am-btns">' + btn('attack', '공격') + btn('tank', '탱') + btn('heal', '힐') + btn('interrupt', '차단') +
-      btn('clear', '해제', !cur && !kick) + '</div>';
+    menu.innerHTML = `<div class="am-title"><b>${esc(m.name)}</b>${now ? ` · ${tr('지금: {now}', { now })}` : ''}</div>` +
+      '<div class="am-btns">' + btn('attack', tr('공격')) + btn('tank', tr('탱')) + btn('heal', tr('힐')) + btn('interrupt', tr('차단')) +
+      btn('clear', tr('해제'), !cur && !kick) + '</div>';
     menu.hidden = false;
     const r = el.querySelector('.disc').getBoundingClientRect();
     const mw = menu.offsetWidth, mh = menu.offsetHeight;
@@ -1059,7 +1092,7 @@
       const base = phasePath(), links = linksOf(phase());
       const gone = ['l_' + from, 'i_' + from].filter(id => links[id]);
       commit(gone.map(id => [base.concat('links', id), null]).concat(renumberOps(base, links, gone)));
-      toast('행동을 해제했습니다');
+      toast(tr('행동을 해제했습니다'));
       return;
     }
     startLinking(from, b.dataset.act);
@@ -1077,12 +1110,13 @@
     const any = Object.keys(toks).some(linkTargetOk);
     if (!any) {
       view.linking = null;
-      return toast(kind === 'heal' ? '힐할 공대원이 지도에 없습니다' : '대상이 없습니다. 위쪽 메뉴에서 보스나 쫄을 먼저 놓으세요');
+      return toast(kind === 'heal' ? tr('힐할 공대원이 지도에 없습니다') : tr('대상이 없습니다. 위쪽 메뉴에서 보스나 쫄을 먼저 놓으세요'));
     }
     viewport.classList.add('linking');
     viewport.classList.toggle('heal', kind === 'heal');
     viewport.classList.toggle('interrupt', kind === 'interrupt');
-    $('#linkHint').innerHTML = `<b>${esc(m.name)}</b> ${KIND_NAME[kind]} 대상: ${kind === 'heal' ? '우리 공대원을' : '보스·쫄·징표를'} 클릭하세요 <span class="muted">· Esc 취소</span>`;
+    $('#linkHint').innerHTML = `<b>${esc(m.name)}</b> ` + tr(kind === 'heal' ? '{kind} 대상: 우리 공대원을 클릭하세요' : '{kind} 대상: 보스·쫄·징표를 클릭하세요', { kind: kindName(kind) }) +
+      ` <span class="muted">· ${tr('Esc 취소')}</span>`;
     $('#linkHint').hidden = false;
     fxPreview.setAttribute('stroke-width', '0');
     scheduleRender();
@@ -1100,7 +1134,7 @@
     if (!L) return;
     if (id === L.from) { endLinking(); return; }
     if (!linkTargetOk(id)) {
-      toast(L.kind === 'heal' ? '힐은 우리 공대원만 선택할 수 있습니다' : '공격·탱은 보스·쫄·징표만 선택할 수 있습니다');
+      toast(L.kind === 'heal' ? tr('힐은 우리 공대원만 선택할 수 있습니다') : tr('공격·탱은 보스·쫄·징표만 선택할 수 있습니다'));
       return;
     }
     endLinking();
@@ -1119,7 +1153,7 @@
     ops.push([base.concat('links', lid), link]);
     commit(ops);
     const type = fxType(L, tokensOf(phase())[L.from]);
-    toast(({ ranged: '원거리 공격', melee: '근거리 공격', tank: '탱', heal: '힐', interrupt: `차단 ${link.n}번` })[type] + '을 연결했습니다');
+    toast(tr('{what}을 연결했습니다', { what: type === 'interrupt' ? tr('차단 {n}번', { n: link.n }) : tr({ ranged: '원거리 공격', melee: '근거리 공격', tank: '탱', heal: '힐' }[type]) }));
   }
   // 차단이 빠지면 같은 대상의 남은 차단 번호를 1부터 다시 매김
   function renumberOps(base, links, removed) {
@@ -1185,7 +1219,7 @@
     let x = round(clamp(pt.x, 0, 1)), y = round(clamp(pt.y, 0, 1));
     if (p.kind === 'member') set([...base, 'm_' + p.id], { type: 'member', ref: p.id, x, y });
     else if (p.kind === 'marker') {
-      if (auto && toks['k_' + p.id]) { flashToken('k_' + p.id); toast('이미 놓은 징표입니다. 지도에서 끌어서 옮기세요'); return; }
+      if (auto && toks['k_' + p.id]) { flashToken('k_' + p.id); toast(tr('이미 놓은 징표입니다. 지도에서 끌어서 옮기세요')); return; }
       set([...base, 'k_' + p.id], { type: 'marker', ref: Number(p.id), x, y });
     } else if (p.kind === 'boss' || p.kind === 'add') {
       // 같은 종류를 차례대로 번호 매기고, 클릭으로 추가하면 앞의 것 오른쪽에 놓음
@@ -1216,7 +1250,7 @@
         x = round(clamp(x, 0.03, 0.97));
         y = round(clamp(y, 0.03, 0.97));
       }
-      const label = (p.kind === 'boss' ? '보스 ' : '쫄 ') + n;
+      const label = tr(p.kind === 'boss' ? '보스 {n}' : '쫄 {n}', { n });
       set([...base, 'x_' + RP.uid(6)], { type: p.kind, label, n, x, y });
     }
   }
@@ -1269,7 +1303,7 @@
   }, { passive: false });
 
   viewport.addEventListener('pointerdown', e => {
-    if (view.linking) { endLinking(); toast('대상 선택을 취소했습니다'); return; }
+    if (view.linking) { endLinking(); toast(tr('대상 선택을 취소했습니다')); return; }
     if (!boss() || e.target.closest('.empty, .stage-note')) return;
     if ((e.altKey || view.pingMode) && canEdit()) {
       const pt = stagePoint(e.clientX, e.clientY);
@@ -1345,9 +1379,9 @@
     const bs = bosses();
     const id = 'b' + RP.uid(6);
     set(['bosses', id], {
-      name: `보스 ${bs.length + 1}`, order: nextOrder(bs),
+      name: tr('보스 {n}', { n: bs.length + 1 }), order: nextOrder(bs),
       map: { kind: 'template', template: 'circle' },
-      phases: { p1: { name: '1단계', order: 0 } }
+      phases: { p1: { name: tr('1단계'), order: 0 } }
     });
     goTo(id, 'p1');
     setTimeout(() => $('#bossName').select(), 50);
@@ -1359,11 +1393,11 @@
     const id = 'p' + RP.uid(6);
     const cur = phase() || {};
     set(['bosses', view.bossId, 'phases', id], {
-      name: `${ps.length + 1}단계`, order: nextOrder(ps),
+      name: tr('{n}단계', { n: ps.length + 1 }), order: nextOrder(ps),
       tokens: clone(cur.tokens) || null, draw: clone(cur.draw) || null, links: clone(cur.links) || null
     });
     goTo(view.bossId, id);
-    toast('현재 배치를 복사해서 새 단계를 만들었습니다');
+    toast(tr('현재 배치를 복사해서 새 단계를 만들었습니다'));
   }
   function move(items, id, dir, pathOf) {
     const i = items.findIndex(x => x.id === id);
@@ -1375,11 +1409,13 @@
 
   // ---------- 명단 ----------
   function fillSelects() {
-    const cls = RP.CLASSES.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-    const roles = RP.ROLES.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+    const cls = RP.CLASSES.map(c => `<option value="${c.id}">${RP.nm(c)}</option>`).join('');
+    const roles = RP.ROLES.map(r => `<option value="${r.id}">${RP.nm(r)}</option>`).join('');
+    const keep = ['mClass', 'eClass', 'mRole', 'eRole'].map(id => $('#' + id).value);
     $('#mClass').innerHTML = cls; $('#eClass').innerHTML = cls;
     $('#mRole').innerHTML = roles; $('#eRole').innerHTML = roles;
-    $('#mRole').value = RP.CLASSES[0].role;
+    ['mClass', 'eClass', 'mRole', 'eRole'].forEach((id, i) => { if (keep[i]) $('#' + id).value = keep[i]; });
+    if (!keep[2]) $('#mRole').value = RP.CLASSES[0].role;
   }
   $('#mClass').addEventListener('change', () => { $('#mRole').value = RP.classById($('#mClass').value).role; });
 
@@ -1387,7 +1423,7 @@
     e.preventDefault();
     const name = $('#mName').value.trim();
     if (!name) return;
-    if (list(state.roster).some(m => m.name === name)) return toast('이미 있는 이름입니다');
+    if (list(state.roster).some(m => m.name === name)) return toast(tr('이미 있는 이름입니다'));
     set(['roster', 'm' + RP.uid(6)], { name: name.slice(0, 24), cls: $('#mClass').value, role: $('#mRole').value, order: Date.now() });
     $('#mName').value = '';
     $('#mName').focus();
@@ -1413,10 +1449,10 @@
     if ($('#bulkDialog').returnValue !== 'ok') return;
     const existing = new Set(list(state.roster).map(m => m.name));
     const rows = parseBulk($('#bulkText').value).filter(r => !existing.has(r.name) && existing.add(r.name));
-    if (!rows.length) return toast('추가할 새 이름이 없습니다');
+    if (!rows.length) return toast(tr('추가할 새 이름이 없습니다'));
     const t = Date.now();
     commit(rows.map((r, i) => [['roster', 'm' + RP.uid(6)], Object.assign(r, { order: t + i })]));
-    toast(`${rows.length}명을 추가했습니다`);
+    toast(tr('{n}명을 추가했습니다', { n: rows.length }));
   });
 
   let editing = null;
@@ -1438,7 +1474,7 @@
       const name = $('#eName').value.trim().slice(0, 24) || state.roster[id].name;
       commit([[['roster', id, 'name'], name], [['roster', id, 'cls'], $('#eClass').value], [['roster', id, 'role'], $('#eRole').value]]);
     } else if (v === 'delete') {
-      const ok = await ask({ title: `${state.roster[id].name}님을 명단에서 지울까요?`, message: '모든 보스·단계의 배치도 함께 지워집니다.', ok: '삭제', danger: true });
+      const ok = await ask({ title: tr('{name}님을 명단에서 지울까요?', { name: state.roster[id].name }), message: tr('모든 보스·단계의 배치도 함께 지워집니다.'), ok: tr('삭제'), danger: true });
       if (!ok || !state.roster || !state.roster[id]) return;
       const ops = [[['roster', id], null]];
       bosses().forEach(b => phases(b).forEach(p => {
@@ -1454,7 +1490,7 @@
     if (!ph) return;
     const toks = tokensOf(ph);
     const members = list(state.roster).filter(m => !toks['m_' + m.id]);
-    if (!members.length) return toast('배치할 인원이 없습니다');
+    if (!members.length) return toast(tr('배치할 인원이 없습니다'));
     const base = [...phasePath(), 'tokens'];
     const by = { tank: [], melee: [], healer: [], ranged: [] };
     members.forEach(m => (by[RP.roleById(m.role).id]).push(m));
@@ -1481,22 +1517,22 @@
     arc(by.healer, 0.24, 30, 150);
     arc(by.ranged, 0.34, 15, 165);
     if (!Object.values(toks).some(t => t && t.type === 'boss')) {
-      ops.push([[...base, 'x_' + RP.uid(6)], { type: 'boss', label: '보스', x: 0.5, y: 0.5 }]);
+      ops.push([[...base, 'x_' + RP.uid(6)], { type: 'boss', label: tr('보스'), x: 0.5, y: 0.5 }]);
     }
     commit(ops);
-    toast(`${members.length}명을 배치했습니다. 끌어서 조정하세요`);
+    toast(tr('{n}명을 배치했습니다. 끌어서 조정하세요', { n: members.length }));
   };
   $('#clearLinksBtn').onclick = async () => {
     const p = phase();
-    if (!p || !p.links || !Object.keys(p.links).length) return toast('이 단계에 연결된 행동이 없습니다');
+    if (!p || !p.links || !Object.keys(p.links).length) return toast(tr('이 단계에 연결된 행동이 없습니다'));
     const path = [...phasePath(), 'links'];
-    if (await ask({ title: '이 단계의 행동 연결을 모두 해제할까요?', message: '공격·탱·힐·차단 선이 모두 지워집니다. 배치는 그대로 둡니다.', ok: '해제', danger: true })) set(path, null);
+    if (await ask({ title: tr('이 단계의 행동 연결을 모두 해제할까요?'), message: tr('공격·탱·힐·차단 선이 모두 지워집니다. 배치는 그대로 둡니다.'), ok: tr('해제'), danger: true })) set(path, null);
   };
   $('#clearPhaseBtn').onclick = async () => {
     const base = [...phasePath(), 'tokens'];
     const ids = Object.keys(tokensOf(phase())).filter(k => k.startsWith('m_'));
     if (!ids.length) return;
-    if (!await ask({ title: '현재 단계의 공대원 배치를 모두 해제할까요?', ok: '해제', danger: true })) return;
+    if (!await ask({ title: tr('현재 단계의 공대원 배치를 모두 해제할까요?'), ok: tr('해제'), danger: true })) return;
     commit(ids.map(id => [base.concat(id), null]).concat([[base.slice(0, -1).concat('links'), null]]));
   };
 
@@ -1523,22 +1559,25 @@
     if (b && p && note) sn.innerHTML = `<b>${esc(b.name)} · ${esc(p.name)}</b>${esc(note)}`;
   }
 
-  $('#templateBtns').innerHTML = Object.keys(RP.MAP_TEMPLATES).map(k =>
-    `<button class="btn small" data-tpl="${k}">${RP.MAP_TEMPLATES[k].name}</button>`).join('');
+  function buildTemplates() {
+    $('#templateBtns').innerHTML = Object.keys(RP.MAP_TEMPLATES).map(k =>
+      `<button class="btn small" data-tpl="${k}">${tr(RP.MAP_TEMPLATES[k].name)}</button>`).join('');
+  }
+  buildTemplates();
   $('#templateBtns').addEventListener('click', e => {
     const b = e.target.closest('[data-tpl]');
     if (b && boss()) set(['bosses', view.bossId, 'map'], { kind: 'template', template: b.dataset.tpl });
   });
   $('#mapUrlBtn').onclick = () => {
     const url = $('#mapUrl').value.trim();
-    if (!/^https?:\/\//i.test(url)) return toast('https:// 로 시작하는 이미지 주소를 넣어주세요');
+    if (!/^https?:\/\//i.test(url)) return toast(tr('https:// 로 시작하는 이미지 주소를 넣어주세요'));
     if (boss()) set(['bosses', view.bossId, 'map'], { kind: 'image', src: url });
   };
   $('#mapFile').addEventListener('change', e => { loadImageFile(e.target.files[0]); e.target.value = ''; });
 
   function loadImageFile(file) {
     if (!canEdit() || !boss()) return;
-    if (!file || !/^image\//.test(file.type)) return toast('이미지 파일이 아닙니다');
+    if (!file || !/^image\//.test(file.type)) return toast(tr('이미지 파일이 아닙니다'));
     const bossId = view.bossId;
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -1568,9 +1607,9 @@
         }
       }
       set(['bosses', bossId, 'map'], { kind: 'image', src: data });
-      toast('지형 이미지를 적용했습니다');
+      toast(tr('지형 이미지를 적용했습니다'));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); toast('이미지를 읽지 못했습니다'); };
+    img.onerror = () => { URL.revokeObjectURL(url); toast(tr('이미지를 읽지 못했습니다')); };
     img.src = url;
   }
   document.addEventListener('paste', e => {
@@ -1617,7 +1656,7 @@
   $('#bossRight').onclick = () => move(bosses(), view.bossId, 1, id => ['bosses', id]);
   $('#bossDel').onclick = async () => {
     const b = boss(), id = view.bossId;
-    if (b && await ask({ title: `'${b.name}' 보스를 지울까요?`, message: '이 보스의 모든 단계와 배치가 지워집니다.', ok: '삭제', danger: true })) set(['bosses', id], null);
+    if (b && await ask({ title: tr("'{name}' 보스를 지울까요?", { name: b.name }), message: tr('이 보스의 모든 단계와 배치가 지워집니다.'), ok: tr('삭제'), danger: true })) set(['bosses', id], null);
   };
   $('#phaseAdd').onclick = addPhase;
   $('#phaseLeft').onclick = () => move(phases(boss()), view.phaseId, -1, id => ['bosses', view.bossId, 'phases', id]);
@@ -1625,9 +1664,9 @@
   $('#phaseDel').onclick = () => {
     const p = phase();
     if (!p) return;
-    if (phases(boss()).length < 2) return toast('단계는 하나 이상 있어야 합니다');
+    if (phases(boss()).length < 2) return toast(tr('단계는 하나 이상 있어야 합니다'));
     const path = phasePath();
-    ask({ title: `'${p.name}' 단계를 지울까요?`, ok: '삭제', danger: true }).then(ok => { if (ok) set(path, null); });
+    ask({ title: tr("'{name}' 단계를 지울까요?", { name: p.name }), ok: tr('삭제'), danger: true }).then(ok => { if (ok) set(path, null); });
   };
 
   // ---------- 비어 있을 때: 레이드 선택 ----------
@@ -1637,14 +1676,14 @@
     if (!changed('empty', sig)) return;
     if (ready && bosses().length) { el.hidden = true; return; }
     el.hidden = false;
-    if (!ready) { el.innerHTML = '<div class="empty-card"><h2>불러오는 중…</h2></div>'; return; }
+    if (!ready) { el.innerHTML = `<div class="empty-card"><h2>${tr('불러오는 중…')}</h2></div>`; return; }
     if (VIEW_ONLY) {
-      el.innerHTML = '<div class="empty-card"><h2>아직 작전판이 비어 있습니다</h2><p class="hint">공대장이 보스를 추가하면 여기에 바로 나타납니다.</p></div>';
+      el.innerHTML = `<div class="empty-card"><h2>${tr('아직 작전판이 비어 있습니다')}</h2><p class="hint">${tr('공대장이 보스를 추가하면 여기에 바로 나타납니다.')}</p></div>`;
       return;
     }
-    el.innerHTML = '<div class="empty-card"><h2>어떤 레이드를 준비할까요?</h2>' +
-      '<p class="hint">보스와 단계 이름은 나중에 언제든 바꿀 수 있습니다.</p><div class="preset-list">' +
-      RP.PRESETS.map(p => `<button class="preset" data-preset="${p.id}"><b>${esc(p.name)}</b><span>${esc(p.sub)}</span></button>`).join('') +
+    el.innerHTML = `<div class="empty-card"><h2>${tr('어떤 레이드를 준비할까요?')}</h2>` +
+      `<p class="hint">${tr('보스와 단계 이름은 나중에 언제든 바꿀 수 있습니다.')}</p><div class="preset-list">` +
+      RP.PRESETS.map(p => `<button class="preset" data-preset="${p.id}"><b>${esc(tr(p.name))}</b><span>${esc(tr(p.sub))}</span></button>`).join('') +
       '</div></div>';
   }
   $('#emptyState').addEventListener('click', e => {
@@ -1654,10 +1693,10 @@
     const ops = p.bosses.map((def, i) => {
       const d = typeof def === 'string' ? { name: def } : def;
       const ph = {};
-      (d.phases || ['1단계']).forEach((n, j) => { ph['p' + (j + 1)] = { name: n, order: j }; });
-      return [['bosses', p.id + (i + 1)], { name: d.name, order: i, map: { kind: 'template', template: 'circle' }, phases: ph }];
+      (d.phases || ['1단계']).forEach((n, j) => { ph['p' + (j + 1)] = { name: tr(n), order: j }; });
+      return [['bosses', p.id + (i + 1)], { name: tr(d.name, { n: d.n }), order: i, map: { kind: 'template', template: 'circle' }, phases: ph }];
     });
-    if (!(state.meta && state.meta.title)) ops.push([['meta', 'title'], p.id === 'blank' ? '공격대 작전판' : p.name + ' 작전']);
+    if (!(state.meta && state.meta.title)) ops.push([['meta', 'title'], p.id === 'blank' ? tr('공격대 작전판') : tr('{raid} 작전', { raid: tr(p.name) })]);
     commit(ops);
   });
 
@@ -1670,9 +1709,9 @@
   async function askMyName(first) {
     $('#rosterNames').innerHTML = list(state.roster).map(m => `<option value="${esc(m.name)}"></option>`).join('');
     const n = await ask({
-      title: first ? '이름을 입력하세요' : '내 이름',
-      message: '접속자 목록에 이 이름으로 보입니다. 게임 캐릭터 이름을 적어 주세요.',
-      value: me.name || '', ok: first ? '입장' : '저장', cancel: first ? '나중에' : '취소', suggest: 'rosterNames'
+      title: first ? tr('이름을 입력하세요') : tr('내 이름'),
+      message: tr('접속자 목록에 이 이름으로 보입니다. 게임 캐릭터 이름을 적어 주세요.'),
+      value: me.name || '', ok: first ? tr('입장') : tr('저장'), cancel: first ? tr('나중에') : tr('취소'), suggest: 'rosterNames'
     });
     if (n === null || !n.trim()) return false;
     setMyName(n.trim());
@@ -1680,6 +1719,7 @@
   }
   let namePromptQueued = false;
   function promptNameOnce() {
+    if (splashOpen) { namePromptPending = true; return; }
     if (me.name || session.get('rp-name-asked') || document.querySelector('dialog[open]')) return;
     session.set('rp-name-asked', '1');
     askMyName(true);
@@ -1707,7 +1747,7 @@
     if (!await askName()) return;
     set(['present'], { on: true, clientId: me.id, name: me.name, bossId: view.bossId, phaseId: view.phaseId });
     sync.guardPresenter(true);
-    toast('발표를 시작했습니다. 보기 링크를 공대원에게 공유하세요');
+    toast(tr('발표를 시작했습니다. 보기 링크를 공대원에게 공유하세요'));
   };
   $('#presentBanner').addEventListener('click', e => {
     const a = e.target.closest('[data-act]');
@@ -1724,10 +1764,10 @@
     u.searchParams.set('room', room);
     if (viewOnly) u.searchParams.set('mode', 'view');
     const s = u.toString();
-    const done = sync.mode === 'local' ? '링크를 복사했습니다. 다만 지금은 로컬 모드라 다른 사람에게는 보이지 않습니다'
-      : viewOnly ? '보기 전용 링크를 복사했습니다' : '편집 링크를 복사했습니다';
+    const done = sync.mode === 'local' ? tr('링크를 복사했습니다. 다만 지금은 로컬 모드라 다른 사람에게는 보이지 않습니다')
+      : viewOnly ? tr('보기 전용 링크를 복사했습니다') : tr('편집 링크를 복사했습니다');
     try { await navigator.clipboard.writeText(s); toast(done); }
-    catch (e) { ask({ title: '아래 링크를 복사하세요', value: s, ok: '닫기' }); }
+    catch (e) { ask({ title: tr('아래 링크를 복사하세요'), value: s, ok: tr('닫기') }); }
   }
   $('#shareEditBtn').onclick = () => copyLink(false);
   $('#shareViewBtn').onclick = () => copyLink(true);
@@ -1743,7 +1783,7 @@
     const data = { app: 'raid-planner', version: 1, exportedAt: new Date().toISOString(), state: Object.assign({}, state, { present: null }) };
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
-    a.download = `작전판-${(state.meta && state.meta.title) || room}.json`;
+    a.download = `${tr('작전판')}-${(state.meta && state.meta.title) || room}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
@@ -1754,16 +1794,16 @@
     f.text().then(async txt => {
       const data = JSON.parse(txt);
       const s = data && data.state;
-      if (!s || typeof s !== 'object') throw new Error('형식 오류');
-      if (!await ask({ title: '백업 파일로 바꿀까요?', message: '현재 작전판 내용이 백업 내용으로 바뀝니다.', ok: '불러오기', danger: true })) return;
+      if (!s || typeof s !== 'object') throw new Error(tr('형식 오류'));
+      if (!await ask({ title: tr('백업 파일로 바꿀까요?'), message: tr('현재 작전판 내용이 백업 내용으로 바뀝니다.'), ok: tr('불러오기'), danger: true })) return;
       const ops = [[['meta'], s.meta || null], [['roster'], s.roster || null], [['present'], null], [['bosses'], null]];
       Object.entries(s.bosses || {}).forEach(([id, b]) => ops.push([['bosses', id], b]));
       commit(ops);
-      toast('백업을 불러왔습니다');
-    }).catch(() => toast('백업 파일을 읽지 못했습니다'));
+      toast(tr('백업을 불러왔습니다'));
+    }).catch(() => toast(tr('백업 파일을 읽지 못했습니다')));
   });
   $('#newPlanBtn').onclick = async () => {
-    if (await ask({ title: '새 작전판을 만들까요?', message: '지금 작전판은 지금 주소(링크)로 다시 열 수 있습니다.', ok: '만들기' })) {
+    if (await ask({ title: tr('새 작전판을 만들까요?'), message: tr('지금 작전판은 지금 주소(링크)로 다시 열 수 있습니다.'), ok: tr('만들기') })) {
       location.href = location.pathname + '?room=' + RP.uid(10);
     }
   };
@@ -1811,7 +1851,7 @@
 
   // ---------- 대화상자 / 알림 ----------
   // value 가 있으면 입력칸을 보여 주고 입력값을, 없으면 확인 여부(true)를 돌려줍니다. 취소는 null.
-  function ask({ title, message = '', value = null, ok = '확인', cancel = '취소', danger = false, suggest = null }) {
+  function ask({ title, message = '', value = null, ok = tr('확인'), cancel = tr('취소'), danger = false, suggest = null }) {
     return new Promise(resolve => {
       const d = $('#askDialog'), input = $('#askInput');
       $('#askTitle').textContent = title;
@@ -1844,7 +1884,28 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), Math.max(2200, msg.length * 70));
   }
 
+  // ---------- 언어 (KR/EN) ----------
+  function applyLanguage() {
+    buildDrawbar();
+    setTool(view.tool);
+    renderDrawbar();
+    buildTemplates();
+    fillSelects();
+    Object.keys(sigs).forEach(k => { sigs[k] = null; });
+    if (lastStatus) $('#connText').textContent = tr(lastStatus[1], lastStatus[2]);
+    if (splashOpen && ready) $('#splashStatus').textContent = tr('화면을 누르면 시작합니다');
+    document.querySelectorAll('#langToggle [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === RP.lang())));
+    renderPeers();
+    render();
+  }
+  $('#langToggle').addEventListener('click', e => {
+    const b = e.target.closest('[data-lang]');
+    if (b) RP.setLang(b.dataset.lang);
+  });
+  RP.onLang(applyLanguage);
+
   fillSelects();
+  document.querySelectorAll('#langToggle [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === RP.lang())));
   render();
   window.RP.debug = { get state() { return state; }, view, sync };
 })();

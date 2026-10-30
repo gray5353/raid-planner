@@ -2,7 +2,7 @@
   "name": "raid-planner",
   "version": "0.1.0",
   "private": true,
-  "description": "WoW 공격대 작전판 - 보스별 배치를 실시간으로 공유",
+  "description": "브리핑 포에버 (Briefing Forever) - WoW: Forever 공격대 브리핑 앱",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -1,4 +1,5 @@
-// 실시간 동기화 어댑터: Firebase / 웹소켓(server.js) / 로컬(BroadcastChannel)
+// 실시간 동기화 어댑터: Firebase / 웹소켓(Cloudflare Worker, server.js) / MQTT / 로컬(BroadcastChannel)
+// 상태 문구(onStatus)는 한국어 문장을 넘기고, 화면에서 현재 언어로 바꿔 보여줍니다.
 // 모든 어댑터는 같은 모양을 가집니다:
 //   { mode, set(path, value), batch([[path, value], ...]), ping(data), setPresence(info), guardPresenter(on) }
 // 상태는 경로(키 배열)로 쓰고, value 가 null 이면 삭제입니다.
@@ -153,7 +154,7 @@
         let offset = 0;
         db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
         stateRef.on('value', s => h.onSnapshot(s.val() || {}),
-          err => h.onStatus('error', 'Firebase 권한 오류 · 규칙을 확인하세요 (' + err.code + ')'));
+          err => h.onStatus('error', 'Firebase 권한 오류 · 규칙을 확인하세요 ({code})', { code: err.code }));
         const presRef = root.child('presence/' + me.id);
         db.ref('.info/connected').on('value', s => {
           if (s.val()) {
@@ -171,7 +172,7 @@
           if (p && p.from !== me.id && Date.now() + offset - p.ts < 4000) h.onPing(p.data);
         });
         const presentOnRef = stateRef.child('present/on');
-        const report = e => h.onStatus('error', '저장 실패 · ' + (e && e.code || e));
+        const report = e => h.onStatus('error', '저장 실패 · {code}', { code: (e && e.code) || String(e) });
         api = {
           set: (p, v) => stateRef.child(p.join('/')).set(v === undefined ? null : v).catch(report),
           batch: ops => {

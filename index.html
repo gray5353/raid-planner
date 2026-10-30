@@ -3,13 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>공격대 작전판</title>
+<title>브리핑 포에버</title>
 <link rel="stylesheet" href="css/style.css">
+<script>
+  // 화면이 그려지기 전에 언어를 정함 (저장된 선택 → 브라우저 언어)
+  (function () {
+    var l = 'ko';
+    try { l = localStorage.getItem('rp-lang') || ((navigator.language || '').toLowerCase().indexOf('ko') === 0 ? 'ko' : 'en'); } catch (e) {}
+    if (l !== 'en') l = 'ko';
+    document.documentElement.lang = l;
+    document.documentElement.classList.add('lang-' + l);
+  })();
+</script>
 </head>
 <body>
+<div class="splash" id="splash" data-i18n-skip>
+  <div class="splash-card">
+    <div class="splash-logo" aria-hidden="true">⚔</div>
+    <h1 class="splash-name"><span class="only-ko">브리핑 포에버</span><span class="only-en">Briefing Forever</span></h1>
+    <p class="splash-msg only-ko">더 즐거운 게임을 위해 브리핑을 합니다.<br>브리핑 하는 사람은 명령자가 아니고 더 많은 경험을 공유한다는 마음으로 즐거운 게임을 만들어주세요.</p>
+    <p class="splash-msg only-en">We brief for a more enjoyable game.<br>Whoever gives the briefing is not a commander. Share what you have learned, and help make the game fun for everyone.</p>
+    <div class="splash-status"><span class="spinner" aria-hidden="true"></span><span id="splashStatus"><span class="only-ko">불러오는 중…</span><span class="only-en">Loading…</span></span></div>
+  </div>
+</div>
+
 <header class="topbar">
   <div class="brand">
     <span class="logo" aria-hidden="true">⚔</span>
+    <span class="app-name">브리핑 포에버</span>
     <input id="planTitle" class="title-input" placeholder="작전판 이름" maxlength="60" aria-label="작전판 이름">
   </div>
   <div class="conn" id="conn" title="">
@@ -23,6 +44,9 @@
     <button id="shareEditBtn" class="btn edit-only" title="편집 가능한 링크 (공대장/부공대장용)">편집 링크</button>
     <button id="shareViewBtn" class="btn" title="보기 전용 링크 (공대원용)">보기 링크</button>
     <button id="stageOnlyBtn" class="btn" title="지도만 크게 보기 (F)">크게 보기</button>
+    <div class="lang-toggle" id="langToggle" role="group" aria-label="Language">
+      <button type="button" data-lang="ko" lang="ko">KR</button><button type="button" data-lang="en" lang="en">EN</button>
+    </div>
   </div>
 </header>
 
@@ -135,12 +159,12 @@
       <div class="row-btns">
         <label class="btn small file-btn">이미지 파일 선택<input type="file" id="mapFile" accept="image/*" hidden></label>
       </div>
-      <p class="hint">스크린샷을 <b>Ctrl+V</b>로 붙여넣거나 지도 위로 끌어다 놓아도 됩니다.</p>
+      <p class="hint" data-i18n-html>스크린샷을 <b>Ctrl+V</b>로 붙여넣거나 지도 위로 끌어다 놓아도 됩니다.</p>
       <details class="howto">
         <summary>보스 지형 이미지 얻는 법</summary>
         <ol>
-          <li><b>WoW Model Viewer</b> · Buildings 탭에서 레이드 건물을 불러와 위에서 내려다본 뒤 Screenshot</li>
-          <li><b>WoW Model Viewer</b> · Textures 탭에서 <code>worldmap</code> 검색 → 레이드 지도 그림을 PNG로 저장</li>
+          <li data-i18n-html><b>WoW Model Viewer</b> · Buildings 탭에서 레이드 건물을 불러와 위에서 내려다본 뒤 Screenshot</li>
+          <li data-i18n-html><b>WoW Model Viewer</b> · Textures 탭에서 <code>worldmap</code> 검색 → 레이드 지도 그림을 PNG로 저장</li>
           <li>게임 안에서 보스 방 지도(M)를 캡처</li>
         </ol>
       </details>
@@ -158,13 +182,13 @@
     <section class="block help">
       <h3>조작법</h3>
       <ul>
-        <li><b>←/→</b> 단계 이동 · <b>↑/↓</b> 보스 이동 · <b>F</b> 크게 보기</li>
-        <li>휠: 확대/축소 · 빈 곳 드래그: 지도 이동 (그리기 중엔 <b>Space</b>+드래그)</li>
+        <li data-i18n-html><b>←/→</b> 단계 이동 · <b>↑/↓</b> 보스 이동 · <b>F</b> 크게 보기</li>
+        <li data-i18n-html>휠: 확대/축소 · 빈 곳 드래그: 지도 이동 (그리기 중엔 <b>Space</b>+드래그)</li>
         <li class="edit-only">보스·쫄 버튼: 클릭할 때마다 오른쪽에 차례대로 추가</li>
-        <li class="edit-only">공대원을 <b>2초 길게 누르기</b>: 공격·탱·힐·차단을 고르고 대상 클릭 (힐은 공대원만) · 다시 길게 눌러 해제</li>
+        <li class="edit-only" data-i18n-html>공대원을 <b>0.5초 길게 누르기</b>: 공격·탱·힐·차단을 고르고 대상 클릭 (힐은 공대원만) · 다시 길게 눌러 해제</li>
         <li class="edit-only">지도의 보스·쫄·글자 클릭: 이름 바꾸기 · 끌기: 이동 · 우클릭: 삭제</li>
-        <li class="edit-only">그리기: <b>V</b> 선택 · <b>P</b> 펜 · <b>L</b> 직선 · <b>A</b> 화살표 · <b>O</b> 원 · <b>R</b> 사각형 · <b>T</b> 글자 · <b>E</b> 지우개 · <b>Ctrl+Z</b> 되돌리기</li>
-        <li class="edit-only"><b>Alt+클릭</b>: 모두에게 핑</li>
+        <li class="edit-only" data-i18n-html>그리기: <b>V</b> 선택 · <b>P</b> 펜 · <b>L</b> 직선 · <b>A</b> 화살표 · <b>O</b> 원 · <b>R</b> 사각형 · <b>T</b> 글자 · <b>E</b> 지우개 · <b>Ctrl+Z</b> 되돌리기</li>
+        <li class="edit-only" data-i18n-html><b>Alt+클릭</b>: 모두에게 핑</li>
       </ul>
     </section>
   </aside>
@@ -173,7 +197,7 @@
 <dialog id="bulkDialog" class="dialog">
   <form method="dialog">
     <h3>공대원 일괄 입력</h3>
-    <p class="hint">한 줄에 한 명씩: <code>이름 직업 역할</code><br>
+    <p class="hint" data-i18n-html>한 줄에 한 명씩: <code>이름 직업 역할</code><br>
       예) <code>홍길동 전사 탱</code> · <code>달빛 사제 힐</code> · <code>바람 사냥꾼</code><br>
       직업·역할은 생략 가능 (역할을 생략하면 직업 기본값). 쉼표, 탭도 구분자로 인식합니다.</p>
     <textarea id="bulkText" rows="12" placeholder="홍길동 전사 탱&#10;달빛 사제 힐&#10;바람 사냥꾼 원딜"></textarea>
@@ -220,6 +244,8 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="js/config.js"></script>
+<script src="js/i18n-en.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/data.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/app.js"></script>

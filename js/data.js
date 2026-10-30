@@ -4,22 +4,22 @@
 
   // WoW: Forever 는 오리지널 9직업 기준
   RP.CLASSES = [
-    { id: 'warrior', name: '전사', color: '#C69B6D', role: 'melee', aliases: ['전사', '전', 'warrior', 'war'] },
-    { id: 'paladin', name: '성기사', color: '#F48CBA', role: 'healer', aliases: ['성기사', '기사', '성기', '팔라딘', 'paladin', 'pal'] },
-    { id: 'hunter', name: '사냥꾼', color: '#AAD372', role: 'ranged', aliases: ['사냥꾼', '냥꾼', '사냥', 'hunter', 'hunt'] },
-    { id: 'rogue', name: '도적', color: '#FFF468', role: 'melee', aliases: ['도적', 'rogue'] },
-    { id: 'priest', name: '사제', color: '#FFFFFF', role: 'healer', aliases: ['사제', 'priest'] },
-    { id: 'shaman', name: '주술사', color: '#0070DD', role: 'healer', aliases: ['주술사', '술사', 'shaman', 'sham'] },
-    { id: 'mage', name: '마법사', color: '#3FC7EB', role: 'ranged', aliases: ['마법사', '법사', 'mage'] },
-    { id: 'warlock', name: '흑마법사', color: '#8788EE', role: 'ranged', aliases: ['흑마법사', '흑마', 'warlock', 'lock'] },
-    { id: 'druid', name: '드루이드', color: '#FF7C0A', role: 'healer', aliases: ['드루이드', '드루', 'druid'] }
+    { id: 'warrior', en: 'Warrior', name: '전사', color: '#C69B6D', role: 'melee', aliases: ['전사', '전', 'warrior', 'war'] },
+    { id: 'paladin', en: 'Paladin', name: '성기사', color: '#F48CBA', role: 'healer', aliases: ['성기사', '기사', '성기', '팔라딘', 'paladin', 'pal'] },
+    { id: 'hunter', en: 'Hunter', name: '사냥꾼', color: '#AAD372', role: 'ranged', aliases: ['사냥꾼', '냥꾼', '사냥', 'hunter', 'hunt'] },
+    { id: 'rogue', en: 'Rogue', name: '도적', color: '#FFF468', role: 'melee', aliases: ['도적', 'rogue'] },
+    { id: 'priest', en: 'Priest', name: '사제', color: '#FFFFFF', role: 'healer', aliases: ['사제', 'priest'] },
+    { id: 'shaman', en: 'Shaman', name: '주술사', color: '#0070DD', role: 'healer', aliases: ['주술사', '술사', 'shaman', 'sham'] },
+    { id: 'mage', en: 'Mage', name: '마법사', color: '#3FC7EB', role: 'ranged', aliases: ['마법사', '법사', 'mage'] },
+    { id: 'warlock', en: 'Warlock', name: '흑마법사', color: '#8788EE', role: 'ranged', aliases: ['흑마법사', '흑마', 'warlock', 'lock'] },
+    { id: 'druid', en: 'Druid', name: '드루이드', color: '#FF7C0A', role: 'healer', aliases: ['드루이드', '드루', 'druid'] }
   ];
 
   RP.ROLES = [
-    { id: 'tank', name: '탱커', short: '탱', aliases: ['탱', '탱커', 'tank', 't'] },
-    { id: 'healer', name: '힐러', short: '힐', aliases: ['힐', '힐러', 'heal', 'healer', 'h'] },
-    { id: 'melee', name: '근딜', short: '근', aliases: ['근딜', '근', '근거리', 'melee', 'm', 'mdps'] },
-    { id: 'ranged', name: '원딜', short: '원', aliases: ['원딜', '원', '원거리', 'ranged', 'r', 'rdps'] }
+    { id: 'tank', name: '탱커', short: '탱', en: 'Tank', enShort: 'T', aliases: ['탱', '탱커', 'tank', 't'] },
+    { id: 'healer', name: '힐러', short: '힐', en: 'Healer', enShort: 'H', aliases: ['힐', '힐러', 'heal', 'healer', 'h'] },
+    { id: 'melee', name: '근딜', short: '근', en: 'Melee', enShort: 'M', aliases: ['근딜', '근', '근거리', 'melee', 'm', 'mdps'] },
+    { id: 'ranged', name: '원딜', short: '원', en: 'Ranged', enShort: 'R', aliases: ['원딜', '원', '원거리', 'ranged', 'r', 'rdps'] }
   ];
 
   RP.classById = id => RP.CLASSES.find(c => c.id === id) || { id: '', name: '?', color: '#9aa3b2', role: 'melee' };
@@ -31,14 +31,14 @@
 
   // 공격대 징표 (게임 내 번호 순서)
   RP.MARKERS = [
-    { id: 1, name: '별', color: '#ffd93b' },
-    { id: 2, name: '동그라미', color: '#ff8a1f' },
-    { id: 3, name: '다이아', color: '#c25cff' },
-    { id: 4, name: '세모', color: '#3ddc4a' },
-    { id: 5, name: '달', color: '#c9d6e8' },
-    { id: 6, name: '네모', color: '#3aa0ff' },
-    { id: 7, name: '엑스', color: '#ff3b3b' },
-    { id: 8, name: '해골', color: '#f2f2f2' }
+    { id: 1, name: '별', en: 'Star', color: '#ffd93b' },
+    { id: 2, name: '동그라미', en: 'Circle', color: '#ff8a1f' },
+    { id: 3, name: '다이아', en: 'Diamond', color: '#c25cff' },
+    { id: 4, name: '세모', en: 'Triangle', color: '#3ddc4a' },
+    { id: 5, name: '달', en: 'Moon', color: '#c9d6e8' },
+    { id: 6, name: '네모', en: 'Square', color: '#3aa0ff' },
+    { id: 7, name: '엑스', en: 'Cross', color: '#ff3b3b' },
+    { id: 8, name: '해골', en: 'Skull', color: '#f2f2f2' }
   ];
 
   const markerShapes = {
@@ -57,6 +57,7 @@
   };
 
   // 레이드 프리셋 (WoW: Forever). 보스 이름/순서는 앱에서 언제든 수정할 수 있습니다.
+  // 이름·설명은 한국어 문장이 번역 열쇠입니다 (js/i18n.js 의 영어 사전).
   // 신규 레이드 보스 이름은 개방(2026-12-09) 전 비공식 명칭입니다.
   RP.PRESETS = [
     {
@@ -76,9 +77,9 @@
       id: 'hs',
       name: '하이잘 정상',
       sub: '20인 · 13보스 · 보스 이름 미정',
-      bosses: Array.from({ length: 13 }, (_, i) => `하이잘 보스 ${i + 1}`)
+      bosses: Array.from({ length: 13 }, (_, i) => ({ name: '하이잘 보스 {n}', n: i + 1 }))
     },
-    { id: 'blank', name: '빈 작전판', sub: '보스를 직접 추가합니다', bosses: ['보스 1'] }
+    { id: 'blank', name: '빈 작전판', sub: '보스를 직접 추가합니다', bosses: [{ name: '보스 {n}', n: 1 }] }
   ];
 
   // 기본 지형 (이미지가 없을 때 쓰는 간단한 경기장)
