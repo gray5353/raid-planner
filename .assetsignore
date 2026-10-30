@@ -13,3 +13,4 @@ package.json
 package-lock.json
 wrangler.toml
 README.md
+DEPLOY.md
