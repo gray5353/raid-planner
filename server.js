@@ -33,6 +33,8 @@ const server = http.createServer((req, res) => {
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    // 이 서버로 열면 실시간 공유는 이 서버의 웹소켓을 사용
+    if (p === '/js/config.js') buf = Buffer.concat([buf, Buffer.from("\nif (window.RP.CONFIG.mode === 'auto') window.RP.CONFIG.mode = 'ws';\n")]);
     res.end(buf);
   });
 });

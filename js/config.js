@@ -1,10 +1,11 @@
 // 실시간 공유 설정
 //
 // mode
-//   'auto'     : firebase 설정이 있으면 Firebase, 없으면 같은 서버의 /ws (server.js),
-//                둘 다 안 되면 로컬 모드로 자동 전환
-//   'firebase' : Firebase Realtime Database 사용 (서버 없이 정적 사이트에 올릴 때 추천)
-//   'ws'       : server.js (Node) 웹소켓 서버 사용
+//   'auto'     : firebase 설정이 있으면 Firebase, 없으면 공개 MQTT 중계 서버 (설정 없이 바로 동작)
+//                server.js 로 실행하면 자동으로 'ws' 가 됩니다
+//   'firebase' : 내 Firebase Realtime Database (안정적으로 오래 쓸 때 추천)
+//   'mqtt'     : 공개 MQTT 중계 서버 (계정·서버 필요 없음, 무료 공용 서버라 가끔 느리거나 데이터가 지워질 수 있음)
+//   'ws'       : server.js (Node) 웹소켓 서버
 //   'local'    : 같은 브라우저의 탭끼리만 공유 (테스트용)
 window.RP = window.RP || {};
 window.RP.CONFIG = {
@@ -18,6 +19,12 @@ window.RP.CONFIG = {
     databaseURL: '',
     projectId: '',
     appId: ''
+  },
+
+  // 공개 MQTT 중계 서버 (앞에서부터 차례로 연결 시도)
+  mqtt: {
+    brokers: ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt'],
+    prefix: 'wow-raid-planner/v1'
   },
 
   // server.js 를 다른 주소에서 실행할 때만 지정 (예: 'wss://raid.example.com/ws')

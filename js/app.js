@@ -55,6 +55,12 @@
   const phasePath = () => ['bosses', view.bossId, 'phases', view.phaseId];
   const canEdit = () => !VIEW_ONLY && ready;
   const presenting = () => !!(state.present && state.present.on && state.present.clientId === me.id);
+  // 발표자가 접속 목록에서 빠지면(창을 닫음 등) 발표 중이 아닌 것으로 봄
+  const presentOn = () => {
+    const pr = state.present;
+    if (!pr || !pr.on) return false;
+    return pr.clientId === me.id || !peers.length || peers.some(p => p && p.id === pr.clientId);
+  };
 
   // ---------- 동기화 ----------
   const sync = RP.connect(room, {
@@ -74,7 +80,7 @@
       $('#connText').textContent = text;
       if (kind === 'local') { peers = []; renderPeers(); }
     },
-    onPeers(ps) { peers = Array.isArray(ps) ? ps : []; renderPeers(); },
+    onPeers(ps) { peers = Array.isArray(ps) ? ps : []; renderPeers(); scheduleRender(); },
     onPing(p) { showPing(p); }
   }, me);
 
@@ -141,7 +147,7 @@
 
   function resolveView() {
     const pr = state.present;
-    if (pr && pr.on && pr.clientId !== me.id && view.follow && state.bosses && state.bosses[pr.bossId]) {
+    if (presentOn() && pr.clientId !== me.id && view.follow && state.bosses && state.bosses[pr.bossId]) {
       view.bossId = pr.bossId;
       view.phaseId = pr.phaseId;
     }
@@ -156,7 +162,7 @@
 
   function goTo(bossId, phaseId) {
     const pr = state.present;
-    if (pr && pr.on && pr.clientId !== me.id && view.follow) {
+    if (presentOn() && pr.clientId !== me.id && view.follow) {
       view.follow = false;
       toast('발표자 따라가기를 껐습니다');
     }
@@ -188,9 +194,9 @@
     const btn = $('#presentBtn');
     btn.textContent = presenting() ? '발표 종료' : '발표 시작';
     btn.classList.toggle('gold', !presenting());
-    const sig = JSON.stringify([pr, view.follow, me.id]);
+    const sig = JSON.stringify([pr, view.follow, me.id, presentOn()]);
     if (!changed('banner', sig)) return;
-    if (!pr || !pr.on) { bn.hidden = true; return; }
+    if (!presentOn()) { bn.hidden = true; return; }
     bn.hidden = false;
     if (pr.clientId === me.id) {
       bn.className = 'banner me';
@@ -651,7 +657,7 @@
       if (shape.t === 'pen') {
         if (Math.hypot(ev.clientX - last[0], ev.clientY - last[1]) < 3) return;
         last = [ev.clientX, ev.clientY];
-        if (shape.d.length > 60000) return;
+        if (shape.d.length > 8000) return;
         shape.d += ` ${nx},${ny}`;
       } else {
         if (ev.shiftKey) {
@@ -1124,8 +1130,21 @@
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(img, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      let data = c.toDataURL('image/jpeg', 0.85);
-      if (data.length > 2500000) data = c.toDataURL('image/jpeg', 0.7);
+      // 실시간 중계 서버의 메시지 크기 제한에 맞춰 약 230KB 이하로 줄임
+      let data = '', canvas = c;
+      for (let q = 0.85; ; q -= 0.1) {
+        data = canvas.toDataURL('image/jpeg', Math.max(q, 0.5));
+        if (data.length <= 310000) break;
+        if (q <= 0.55) {
+          const small = document.createElement('canvas');
+          small.width = Math.round(canvas.width * 0.8);
+          small.height = Math.round(canvas.height * 0.8);
+          small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+          canvas = small;
+          q = 0.95;
+          if (canvas.width < 300) break;
+        }
+      }
       set(['bosses', bossId, 'map'], { kind: 'image', src: data });
       toast('지형 이미지를 적용했습니다');
     };
