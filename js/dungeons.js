@@ -40,7 +40,8 @@
   const COLORS = ['#ff5a4f', '#ffd23f', '#4fc36b', '#4fa8ff', '#b98cff'];
   const TOOLS = [['move', '이동 / 보스 선택'], ['pen', '펜'], ['hl', '형광펜'], ['arrow', '화살표'], ['rect', '사각형'], ['text', '글자'], ['erase', '지우개']];
   let state = {}, ready = false, peers = [], lastStatus = null;
-  const ui = { tool: 'move', color: COLORS[0], width: 4, zoom: 1, panX: 0, panY: 0, level: Number(local.get('rp-atlas-level')) || null, q: '' };
+  const ui = { tool: 'move', color: COLORS[0], width: 4, zoom: 1, panX: 0, panY: 0, level: Number(local.get('rp-atlas-level')) || null, q: '',
+    legend: { 1: true, 0: false }[local.get('rp-atlas-legend')] ?? null };
   let localSel = { d: dunById(params.get('d')) ? params.get('d') : (local.get('rp-atlas-dun') || DUNS[0].id), b: 0 };
   let follow = true, lastSelKey = '';
 
@@ -51,23 +52,38 @@
     if (key !== lastSelKey) { lastSelKey = key; if (state.sel) follow = true; }
     const s = follow && state.sel && dunById(state.sel.d) ? state.sel : localSel;
     const d = dunById(s.d) || DUNS[0];
-    return { d, b: clamp(Number(s.b) || 0, 0, Math.max(0, d.bosses.length - 1)) };
+    const b = clamp(Number(s.b) || 0, 0, Math.max(0, d.bosses.length - 1));
+    const p = pinOf(d, b);
+    const f = clamp(Number.isInteger(s.f) ? s.f : (p ? p.f : 0), 0, floorCount(d) - 1);
+    return { d, b, f };
   }
-  function select(dId, b) {
-    localSel = { d: dId, b: b || 0 };
+  // 층을 정하지 않으면 그 보스가 있는 층으로 (위치가 없으면 지금 층 그대로)
+  function select(dId, b, f) {
+    b = b || 0;
+    if (f === undefined) {
+      const d = dunById(dId), cur = current(), p = d && pinOf(d, b);
+      f = p ? p.f : (cur.d.id === dId ? cur.f : 0);
+    }
+    localSel = { d: dId, b, f };
     local.set('rp-atlas-dun', dId);
     if (canEdit()) set(['sel'], localSel);
     else { follow = false; scheduleRender(); }
   }
 
   // 작전판에서 고친 내용 (지도, 보스 위치, 공략, 추가 아이템)
+  // 층(f): 기본 지도는 d.maps[f], 올린 지도는 1층이 edits.map, 그 위 층은 edits.maps.f<번호>
   const edits = d => (state.edits && state.edits[d.id]) || {};
-  const mapOf = d => edits(d).map || d.map || '';
+  const floorCount = d => Math.max(1, (d.maps || []).length);
+  const mapEdit = (d, f) => (f ? (edits(d).maps || {})['f' + f] : edits(d).map) || '';
+  const mapPath = (d, f) => (f ? ['edits', d.id, 'maps', 'f' + f] : ['edits', d.id, 'map']);
+  const mapOf = (d, f) => mapEdit(d, f) || ((d.maps || [])[f] || {}).src || (f ? '' : d.map || '');
+  const floorName = (d, f) => { const m = (d.maps || [])[f]; return m && m.name ? L(m.name) : tr('{n}층', { n: f + 1 }); };
+  const drawKey = (d, f) => (f ? `${d.id}-f${f}` : d.id);
   function pinOf(d, i) {
     const p = (edits(d).pins || {})['b' + i];
-    if (p && typeof p.x === 'number') return p;
+    if (p && typeof p.x === 'number') return { x: p.x, y: p.y, f: clamp(Number(p.f) || 0, 0, floorCount(d) - 1), edited: true };
     const pos = d.bosses[i] && d.bosses[i].pos;
-    return pos ? { x: pos[0], y: pos[1] } : null;
+    return pos ? { x: pos[0], y: pos[1], f: clamp(pos[2] || 0, 0, floorCount(d) - 1) } : null;
   }
   function tipsOf(d, i) {
     const t = (edits(d).tips || {})['b' + i];
@@ -131,6 +147,7 @@
     renderHeader(cur);
     renderPicker(cur);
     renderMap(cur);
+    renderFloors(cur);
     renderPins(cur);
     renderDrawings(cur);
     renderLegend(cur);
@@ -206,13 +223,13 @@
   let natW = 1600, natH = 1000, baseX = 0, baseY = 0, baseW = 0, baseH = 0, zoomDun = null, svgH = 1000;
   const SVG_W = 1000;
 
-  function renderMap({ d }) {
-    if (zoomDun !== d.id) {
-      zoomDun = d.id;
+  function renderMap({ d, f }) {
+    if (zoomDun !== d.id + '/' + f) {
+      if (!zoomDun || zoomDun.split('/')[0] !== d.id) { undo.length = 0; redo.length = 0; }
+      zoomDun = d.id + '/' + f;
       ui.zoom = 1; ui.panX = 0; ui.panY = 0;
-      undo.length = 0; redo.length = 0;
     }
-    const src = mapOf(d);
+    const src = mapOf(d, f);
     const ph = $('#mapPlaceholder');
     if (!src) {
       mapImg.hidden = true;
@@ -277,25 +294,56 @@
     $('#bigBtn').textContent = on ? tr('작게 보기') : tr('크게 보기');
   };
 
+  // ---------- 층 ----------
+  function renderFloors({ d, f }) {
+    const n = floorCount(d), el = $('#floorTabs');
+    const sig = JSON.stringify([d.id, f, n, RP.lang(), d.bosses.map((x, i) => pinOf(d, i))]);
+    if (!changed('floors', sig)) return;
+    el.hidden = n < 2;
+    el.innerHTML = n < 2 ? '' : Array.from({ length: n }, (_, i) => {
+      const nums = d.bosses.map((x, j) => { const p = pinOf(d, j); return p && p.f === i ? j + 1 : 0; }).filter(Boolean);
+      return `<button type="button" data-floor="${i}" aria-pressed="${i === f}">${esc(floorName(d, i))}` +
+        (nums.length ? `<span class="fl-n">${nums.join('·')}</span>` : '') + '</button>';
+    }).join('');
+  }
+  $('#floorTabs').addEventListener('click', e => {
+    const t = e.target.closest('[data-floor]');
+    if (!t) return;
+    const { d, b } = current();
+    select(d.id, b, Number(t.dataset.floor));
+  });
+
   // ---------- 보스 위치 핀 ----------
-  function renderPins({ d, b }) {
-    const sig = JSON.stringify([d.id, b, d.bosses.map((x, i) => pinOf(d, i))]);
+  function renderPins({ d, b, f }) {
+    const sig = JSON.stringify([d.id, b, f, d.bosses.map((x, i) => pinOf(d, i))]);
     if (!changed('pins', sig)) return;
     $('#pinLayer').innerHTML = d.bosses.map((x, i) => {
       const p = pinOf(d, i);
-      return p ? `<button type="button" class="pin${i === b ? ' active' : ''}" data-boss="${i}" style="left:${p.x * 100}%;top:${p.y * 100}%" title="${esc(bossName(x))}">${i + 1}</button>` : '';
+      return p && p.f === f ? `<button type="button" class="pin${i === b ? ' active' : ''}" data-boss="${i}" style="left:${p.x * 100}%;top:${p.y * 100}%" title="${esc(bossName(x))}">${i + 1}</button>` : '';
     }).join('');
   }
-  function renderLegend({ d, b }) {
+  function renderLegend({ d, b, f }) {
     const lg = $('#bossLegend');
     if (!d.bosses.length) { lg.hidden = true; return; }
     lg.hidden = false;
-    const missing = d.bosses.some((x, i) => !pinOf(d, i));
-    const sig = JSON.stringify([d.id, b, d.bosses.map((x, i) => !!pinOf(d, i)), RP.lang(), canEdit()]);
+    const pins = d.bosses.map((x, i) => pinOf(d, i));
+    const missing = pins.some(p => !p), multi = floorCount(d) > 1;
+    // 위치가 다 있으면 접어서 지도를 가리지 않음 (직접 펼치거나 접은 것은 기억)
+    const open = ui.legend === null ? missing && canEdit() : ui.legend;
+    const sig = JSON.stringify([d.id, b, f, pins.map(p => (p ? p.f : -1)), RP.lang(), canEdit(), open]);
     if (!changed('legend', sig)) return;
-    lg.innerHTML = `<b>${tr('보스 번호')}</b><p>${missing ? (canEdit() ? tr('위치 미확인 · 번호를 지도로 끌어다 놓기') : tr('위치 미확인 · 클릭하면 공략')) : tr('클릭하면 공략')}</p>` +
-      '<div class="legend-nums">' + d.bosses.map((x, i) =>
-        `<button type="button" data-boss="${i}" class="${i === b ? 'active' : ''}${pinOf(d, i) ? '' : ' nopos'}" title="${esc(bossName(x))}">${i + 1}</button>`).join('') + '</div>';
+    lg.classList.toggle('collapsed', !open);
+    const head = `<button type="button" class="lg-toggle" aria-expanded="${open}">${tr('보스 번호')} <span aria-hidden="true">${open ? '▴' : '▾'}</span></button>`;
+    if (!open) { lg.innerHTML = head; return; }
+    const hint = missing ? (canEdit() ? tr('위치 미확인 · 번호를 지도로 끌어다 놓기') : tr('위치 미확인 · 클릭하면 공략'))
+      : multi ? tr('클릭하면 공략 · 다른 층 보스는 그 층으로') : tr('클릭하면 공략');
+    lg.innerHTML = `${head}<p>${hint}</p>` +
+      '<div class="legend-nums">' + d.bosses.map((x, i) => {
+        const p = pins[i];
+        const cls = (i === b ? 'active' : '') + (!p ? ' nopos' : p.f !== f ? ' other' : '');
+        const title = bossName(x) + (p && multi ? ' · ' + floorName(d, p.f) : '');
+        return `<button type="button" data-boss="${i}" class="${cls}" title="${esc(title)}">${i + 1}</button>`;
+      }).join('') + '</div>';
   }
   function renderTabs({ d, b }) {
     const sig = JSON.stringify([d.id, b, RP.lang()]);
@@ -311,7 +359,7 @@
   // 핀: 클릭하면 공략, 편집 링크에서는 끌어서 위치 옮기기
   // 범례 번호: 클릭하면 공략, 편집 링크에서는 지도로 끌어다 놓아 위치 지정
   function beginPinDrag(e, i, fromLegend) {
-    const d = current().d;
+    const { d, f } = current();
     const sx = e.clientX, sy = e.clientY;
     let moved = false, ghost = null;
     const move = ev => {
@@ -338,7 +386,7 @@
       if (!moved) { select(d.id, i); return; }
       if (!canEdit() || ev.type === 'pointercancel') return;
       const p = stagePoint(ev.clientX, ev.clientY);
-      if (inMap(p)) set(['edits', d.id, 'pins', 'b' + i], { x: round(p.x), y: round(p.y) });
+      if (inMap(p)) set(['edits', d.id, 'pins', 'b' + i], { x: round(p.x), y: round(p.y), f });
       else if (!fromLegend) { set(['edits', d.id, 'pins', 'b' + i], null); toast(tr('보스 위치를 지웠습니다')); }
     };
     window.addEventListener('pointermove', move);
@@ -351,6 +399,13 @@
     e.stopPropagation();
     e.preventDefault();
     beginPinDrag(e, Number(p.dataset.boss), false);
+  });
+  $('#bossLegend').addEventListener('click', e => {
+    const t = e.target.closest('.lg-toggle');
+    if (!t) return;
+    ui.legend = t.getAttribute('aria-expanded') !== 'true';
+    local.set('rp-atlas-legend', ui.legend ? '1' : '0');
+    render();
   });
   $('#bossLegend').addEventListener('pointerdown', e => {
     const p = e.target.closest('[data-boss]');
@@ -402,8 +457,8 @@
     return `<rect ${a} ${st}/><rect class="hit" ${a} stroke-width="${hitW}"/>`;
   }
 
-  function renderDrawings({ d }) {
-    const shapes = (state.draw && state.draw[d.id]) || {};
+  function renderDrawings({ d, f }) {
+    const shapes = (state.draw && state.draw[drawKey(d, f)]) || {};
     const ids = Object.keys(shapes).filter(id => shapes[id] && typeof shapes[id] === 'object')
       .sort((a, b) => (shapes[a].o || 0) - (shapes[b].o || 0) || a.localeCompare(b));
     const seen = new Set();
@@ -441,18 +496,18 @@
     const el = document.elementFromPoint(cx, cy);
     const g = el && el.closest && el.closest('[data-shape]');
     if (!g || !drawSvg.contains(g)) return;
-    const d = current().d;
-    const path = ['draw', d.id, g.dataset.shape];
-    const before = state.draw && state.draw[d.id] && state.draw[d.id][g.dataset.shape];
+    const { d, f } = current(), k = drawKey(d, f);
+    const path = ['draw', k, g.dataset.shape];
+    const before = state.draw && state.draw[k] && state.draw[k][g.dataset.shape];
     if (!before) return;
     record(path, before, null);
     set(path, null);
   }
   async function placeText(pt) {
-    const d = current().d;
+    const { d, f } = current();
     const s = await ask({ title: tr('지도에 쓸 글자'), value: '' });
     if (!s || !s.trim()) return;
-    const path = ['draw', d.id, 'd' + RP.uid(7)];
+    const path = ['draw', drawKey(d, f), 'd' + RP.uid(7)];
     const shape = { t: 'text', s: s.trim().slice(0, 40), x: round(pt.x), y: round(pt.y), c: ui.color, w: ui.width, o: Date.now() };
     record(path, null, shape);
     set(path, shape);
@@ -466,8 +521,8 @@
       if (ui.tool === 'erase') { eraseAt(e.clientX, e.clientY); track(ev => eraseAt(ev.clientX, ev.clientY), () => {}); return; }
       if (!inMap(pt)) return;
       if (ui.tool === 'text') { placeText(pt); return; }
-      const d = current().d;
-      const path = ['draw', d.id, 'd' + RP.uid(7)];
+      const { d, f } = current();
+      const path = ['draw', drawKey(d, f), 'd' + RP.uid(7)];
       const x = round(pt.x), y = round(pt.y);
       const shape = { t: ui.tool, c: ui.color, w: ui.width, o: Date.now() };
       if (ui.tool === 'pen' || ui.tool === 'hl') shape.d = `${x},${y}`;
@@ -536,12 +591,12 @@
     set(a.path, a.after);
   };
   $('#atClear').onclick = async () => {
-    const d = current().d;
-    const all = state.draw && state.draw[d.id];
+    const { d, f } = current(), k = drawKey(d, f);
+    const all = state.draw && state.draw[k];
     if (!all || !Object.keys(all).length) return toast(tr('지울 그림이 없습니다'));
     if (!await ask({ title: tr('이 던전 지도의 그림을 모두 지울까요?'), message: tr('실행 취소로 되돌릴 수 있습니다.'), ok: tr('지우기'), danger: true })) return;
-    record(['draw', d.id], all, null);
-    set(['draw', d.id], null);
+    record(['draw', k], all, null);
+    set(['draw', k], null);
   };
 
   // 이미지 저장: 지도 + 그림 + 보스 번호
@@ -553,14 +608,14 @@
     im.src = src;
   });
   $('#atSave').onclick = async () => {
-    const { d } = current();
+    const { d, f } = current();
     const W = natW, H = natH;
     const cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const ctx = cv.getContext('2d');
     ctx.fillStyle = '#121212';
     ctx.fillRect(0, 0, W, H);
-    const src = mapOf(d);
+    const src = mapOf(d, f);
     try { if (src) ctx.drawImage(await loadImg(src), 0, 0, W, H); } catch (e) { /* 그림만 저장 */ }
     const svg = drawSvg.cloneNode(true);
     svg.querySelectorAll('.hit').forEach(x => x.remove());
@@ -573,7 +628,7 @@
     const r = Math.max(14, W / 70);
     d.bosses.forEach((x, i) => {
       const p = pinOf(d, i);
-      if (!p) return;
+      if (!p || p.f !== f) return;
       ctx.beginPath();
       ctx.arc(p.x * W, p.y * H, r, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(14,16,20,.9)';
@@ -592,8 +647,10 @@
         if (!blob) return toast(tr('이미지를 만들지 못했습니다'));
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `${dunName(d)}.png`;
+        a.download = `${dunName(d)}${floorCount(d) > 1 ? ' - ' + floorName(d, f) : ''}.png`;
+        document.body.appendChild(a);
         a.click();
+        a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       }, 'image/png');
     } catch (e) {
@@ -621,7 +678,13 @@
       const sub = RP.lang() === 'ko' && boss.ko && boss.ko !== boss.en ? boss.en : '';
       $('#bossHead').innerHTML = `<span class="no">${tr('보스')} ${String(b + 1).padStart(2, '0')}</span><h2>${esc(bossName(boss))}</h2>` +
         (sub || boss.opt ? `<span class="sub">${esc(sub)}${sub && boss.opt ? ' · ' : ''}${boss.opt ? tr('선택 보스') : ''}</span>` : '');
-      $('#bossLoc').textContent = [pinOf(d, b) ? '' : tr('이 보스의 지도 위치는 확인 중입니다.'), L(boss.note)].filter(Boolean).join(' · ');
+      const p = pinOf(d, b);
+      $('#bossLoc').textContent = [
+        p ? '' : tr('이 보스의 지도 위치는 확인 중입니다.'),
+        p && floorCount(d) > 1 ? tr('위치: {f}', { f: floorName(d, p.f) }) : '',
+        p && !p.edited && d.approx ? tr('지도 위 번호는 대략적인 위치입니다') : '',
+        L(boss.note)
+      ].filter(Boolean).join(' · ');
       const tips = tipsOf(d, b);
       $('#tipsText').textContent = tips || tr('아직 공략이 없습니다.');
       $('#tipsText').className = 'tips-text' + (tips ? '' : ' empty-tip');
@@ -640,6 +703,8 @@
     info.push(`<h3>${tr('던전 정보')}</h3>`);
     info.push(`<p>${esc(L(d.zone))} · ${tr('레벨 {lv}', { lv: levelText(d) })} · ${tr('보스 {n}명', { n: d.bosses.length })}</p>`);
     if (d.note) info.push(`<p>${esc(L(d.note))}</p>`);
+    if (d.maps) info.push(`<p>${tr('지도: 게임 안 던전 지도 (Blizzard Entertainment). 보스 번호는 지도의 해골 표시와 클래식 공략을 보고 찍은 대략적인 위치입니다.')}</p>`);
+    if (d.mapNote) info.push(`<p>${esc(L(d.mapNote))}</p>`);
     info.push(`<p>${d.beta ? tr('신규 던전의 베타 자료라 출시 후 바뀔 수 있습니다.') : tr('클래식 기준 자료입니다. WoW: Forever 에서 달라질 수 있습니다.')}</p>`);
     if (d.sources && d.sources.length) {
       info.push(`<p>${tr('자료 출처')}</p><ul>` + d.sources.map(([n, u]) => `<li><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(n)}</a></li>`).join('') + '</ul>');
@@ -687,7 +752,7 @@
   function loadImageFile(file) {
     if (!canEdit()) return;
     if (!file || !/^image\//.test(file.type)) return toast(tr('이미지 파일이 아닙니다'));
-    const dId = current().d.id;
+    const { d: dd, f } = current();
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -715,7 +780,7 @@
           if (cv.width < 300) break;
         }
       }
-      set(['edits', dId, 'map'], data);
+      set(mapPath(dd, f), data);
       toast(tr('지도를 적용했습니다'));
     };
     img.onerror = () => { URL.revokeObjectURL(url); toast(tr('이미지를 읽지 못했습니다')); };
@@ -726,12 +791,13 @@
     const u = await ask({ title: tr('지도 이미지 주소'), value: 'https://' });
     if (u === null) return;
     if (!/^https:\/\/\S+$/i.test(u.trim())) return toast(tr('https:// 로 시작하는 이미지 주소를 넣어주세요'));
-    set(['edits', current().d.id, 'map'], u.trim());
+    const { d, f } = current();
+    set(mapPath(d, f), u.trim());
   };
   $('#mapClear').onclick = async () => {
-    const d = current().d;
-    if (!edits(d).map) return toast(tr('이 작전판에서 올린 지도가 없습니다'));
-    if (await ask({ title: tr('올린 지도를 지울까요?'), ok: tr('지우기'), danger: true })) set(['edits', d.id, 'map'], null);
+    const { d, f } = current();
+    if (!mapEdit(d, f)) return toast(tr('이 작전판에서 올린 지도가 없습니다'));
+    if (await ask({ title: tr('올린 지도를 지울까요?'), message: d.maps ? tr('기본 게임 지도로 돌아갑니다.') : '', ok: tr('지우기'), danger: true })) set(mapPath(d, f), null);
   };
   document.addEventListener('paste', e => {
     if (!canEdit() || (e.target.closest && e.target.closest('input, textarea'))) return;
@@ -760,7 +826,9 @@
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
     a.download = 'dungeon-edits.json';
+    document.body.appendChild(a);
     a.click();
+    a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
 

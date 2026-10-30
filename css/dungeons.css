@@ -51,6 +51,13 @@
 .at-width input { width: 110px; accent-color: var(--gold); }
 .at-acts { display: flex; flex-wrap: wrap; gap: 4px; }
 .atlas-view-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.floor-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.floor-tabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); color: var(--text); font-size: 13px;
+}
+.floor-tabs button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-ink); background: var(--gold); font-weight: 700; }
+.floor-tabs .fl-n { font-size: 11px; opacity: .75; font-variant-numeric: tabular-nums; }
 .atlas-viewport { flex: 1; min-height: 320px; border: 1px solid var(--line); border-radius: 10px; }
 .atlas-viewport.tool-draw { cursor: crosshair; }
 .atlas-viewport.tool-erase { cursor: cell; }
@@ -81,7 +88,8 @@
   position: absolute; top: 10px; right: 10px; z-index: 5; max-width: min(260px, calc(100% - 20px));
   padding: 10px 12px; background: rgba(14,16,20,.9); border: 1px solid var(--line); border-radius: 10px;
 }
-.boss-legend b { color: var(--gold); font-size: 13px; }
+.boss-legend.collapsed { padding: 6px 12px; }
+.lg-toggle { background: none; border: 0; padding: 0; color: var(--gold); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .boss-legend p { margin: 2px 0 8px; font-size: 12px; color: var(--muted); }
 .legend-nums { display: flex; flex-wrap: wrap; gap: 6px; }
 .legend-nums button {
@@ -89,6 +97,7 @@
   font-weight: 800; cursor: pointer; touch-action: none;
 }
 .legend-nums button.nopos { border-style: dashed; opacity: .75; }
+.legend-nums button.other { opacity: .5; }
 .legend-nums button.active { background: var(--gold); color: var(--gold-ink); }
 .boss-tabs-bottom { display: flex; flex-wrap: wrap; gap: 8px; }
 .boss-tabs-bottom button {

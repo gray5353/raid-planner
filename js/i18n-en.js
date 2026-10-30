@@ -304,5 +304,12 @@ window.RP_I18N_EN = {
  "펜": "Pen",
  "형광펜": "Highlighter",
  "화살표": "Arrow",
- "획득 아이템": "Loot"
+ "획득 아이템": "Loot",
+ "{n}층": "Floor {n}",
+ "층": "Floors",
+ "클릭하면 공략 · 다른 층 보스는 그 층으로": "Click for strategy · bosses on other floors open that floor",
+ "위치: {f}": "Location: {f}",
+ "지도 위 번호는 대략적인 위치입니다": "Map positions are approximate",
+ "지도: 게임 안 던전 지도 (Blizzard Entertainment). 보스 번호는 지도의 해골 표시와 클래식 공략을 보고 찍은 대략적인 위치입니다.": "Map: in-game dungeon map (Blizzard Entertainment). Boss numbers are approximate, placed from the map's skull markers and Classic guides.",
+ "기본 게임 지도로 돌아갑니다.": "The default in-game map will come back."
 };

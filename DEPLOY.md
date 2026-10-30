@@ -19,7 +19,8 @@
 
 ```
 index.html, css/, js/   브리핑 화면 (정적 파일, 빌드 과정 없음)
-dungeons.html           던전 도감 화면 (js/dungeons.js, js/dungeon-data.js, css/dungeons.css)
+dungeons.html           던전 도감 화면 (js/dungeons.js, js/dungeon-data.js, js/dungeon-maps.js, css/dungeons.css)
+assets/maps/            던전 지도 그림 44장 (약 5.6MB, 보는 층만 내려받음)
 worker/index.js         Cloudflare Worker
                           /ws?room=<작전판>  → 작전판마다 Durable Object(Room) 하나가 웹소켓 접속을 받음
                           그 밖의 경로       → 정적 파일 (Workers Assets)
