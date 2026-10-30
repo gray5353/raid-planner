@@ -21,5 +21,8 @@ window.RP.CONFIG = {
   },
 
   // server.js 를 다른 주소에서 실행할 때만 지정 (예: 'wss://raid.example.com/ws')
-  wsUrl: ''
+  wsUrl: '',
+
+  // 주소에 ?room= 이 없을 때 열 작전판 이름 (비우면 새 작전판을 만듭니다)
+  defaultRoom: ''
 };

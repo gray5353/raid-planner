@@ -28,6 +28,8 @@
     const key = 'rp-local-' + room;
     let state = {};
     try { state = JSON.parse(localStorage.getItem(key)) || {}; } catch (e) { state = {}; }
+    const seed = RP.CONFIG && RP.CONFIG.seed;
+    if (!Object.keys(state).length && seed) state = clone(seed);
     let bc = null;
     try { bc = new BroadcastChannel(key); } catch (e) { bc = null; }
     let saveTimer = null;

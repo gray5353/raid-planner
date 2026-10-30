@@ -18,7 +18,7 @@
   // ---------- 방 / 모드 ----------
   const params = new URLSearchParams(location.search);
   const VIEW_ONLY = params.get('mode') === 'view';
-  let room = (params.get('room') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+  let room = (params.get('room') || (RP.CONFIG && RP.CONFIG.defaultRoom) || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
   if (!room) {
     room = RP.uid(10);
     params.set('room', room);
@@ -1265,7 +1265,9 @@
     u.searchParams.set('room', room);
     if (viewOnly) u.searchParams.set('mode', 'view');
     const s = u.toString();
-    try { await navigator.clipboard.writeText(s); toast(viewOnly ? '보기 전용 링크를 복사했습니다' : '편집 링크를 복사했습니다'); }
+    const done = sync.mode === 'local' ? '링크를 복사했습니다. 다만 지금은 로컬 모드라 다른 사람에게는 보이지 않습니다'
+      : viewOnly ? '보기 전용 링크를 복사했습니다' : '편집 링크를 복사했습니다';
+    try { await navigator.clipboard.writeText(s); toast(done); }
     catch (e) { ask({ title: '아래 링크를 복사하세요', value: s, ok: '닫기' }); }
   }
   $('#shareEditBtn').onclick = () => copyLink(false);
@@ -1373,7 +1375,7 @@
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+    toastTimer = setTimeout(() => t.classList.remove('show'), Math.max(2200, msg.length * 70));
   }
 
   fillSelects();
