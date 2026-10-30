@@ -32,7 +32,7 @@
   const texts = [], blocks = [], attrs = [];
   function collect(el) {
     if (el.nodeType !== 1 || el.hasAttribute('data-i18n-skip') || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
-    ['placeholder', 'title', 'aria-label'].forEach(a => {
+    ['placeholder', 'title', 'aria-label', 'data-placeholder'].forEach(a => {
       const v = el.getAttribute(a);
       if (v && HANGUL.test(v)) attrs.push([el, a, v]);
     });

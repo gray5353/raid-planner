@@ -56,18 +56,23 @@
     return `<svg viewBox="0 0 24 24" aria-hidden="true">${markerShapes[m.id](m.color)}</svg>`;
   };
 
+  // 공격대 인원 (파티는 5명씩)
+  RP.RAID_SIZES = [10, 20, 40];
+
   // 레이드 프리셋 (WoW: Forever). 보스 이름/순서는 앱에서 언제든 수정할 수 있습니다.
   // 이름·설명은 한국어 문장이 번역 열쇠입니다 (js/i18n.js 의 영어 사전).
   // 신규 레이드 보스 이름은 개방(2026-12-09) 전 비공식 명칭입니다.
   RP.PRESETS = [
     {
       id: 'ony',
+      size: 40,
       name: '오닉시아의 둥지',
       sub: '40인 · 1보스',
       bosses: [{ name: '오닉시아', phases: ['1단계 · 지상', '2단계 · 비행', '3단계 · 지상'] }]
     },
     {
       id: 'bd',
+      size: 10,
       name: 'Barrow Deeps',
       sub: '10인 · 8보스 · 비공식 명칭',
       bosses: ['Deepscar Matriarch', 'Khalith the Dreadspinner', 'Amethrax', 'Ravus and Darlissa',
@@ -75,11 +80,12 @@
     },
     {
       id: 'hs',
+      size: 20,
       name: '하이잘 정상',
       sub: '20인 · 13보스 · 보스 이름 미정',
       bosses: Array.from({ length: 13 }, (_, i) => ({ name: '하이잘 보스 {n}', n: i + 1 }))
     },
-    { id: 'blank', name: '빈 작전판', sub: '보스를 직접 추가합니다', bosses: [{ name: '보스 {n}', n: 1 }] }
+    { id: 'blank', size: 20, name: '빈 작전판', sub: '보스를 직접 추가합니다', bosses: [{ name: '보스 {n}', n: 1 }] }
   ];
 
   // 기본 지형 (이미지가 없을 때 쓰는 간단한 경기장)

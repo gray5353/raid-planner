@@ -287,35 +287,70 @@
     }
   }
 
+  // 공격대 표: 5명씩 파티, 2열. 공대원은 slot(0부터) 자리에 앉음
+  const raidSize = () => {
+    const n = state.meta && state.meta.size;
+    if (RP.RAID_SIZES.includes(n)) return n;
+    const count = Object.keys(state.roster || {}).length;
+    return count > 20 ? 40 : count > 10 ? 20 : 20;
+  };
+  // 자리가 없거나 겹치는 공대원은 앞쪽 빈자리부터 채우고, 그래도 남으면 자리 밖(overflow)
+  function layoutSlots(members, size) {
+    const slots = new Array(size).fill(null), rest = [], assign = [], overflow = [];
+    members.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).forEach(m => {
+      const k = m.slot;
+      if (Number.isInteger(k) && k >= 0 && k < size && !slots[k]) slots[k] = m; else rest.push(m);
+    });
+    rest.forEach(m => {
+      const free = slots.indexOf(null);
+      if (free >= 0) { slots[free] = m; assign.push([m.id, free]); } else overflow.push(m);
+    });
+    return { slots, assign, overflow };
+  }
+  const partyMembers = p => layoutSlots(list(state.roster), raidSize()).slots.slice(p * 5, p * 5 + 5).filter(Boolean);
+
+  function memberChip(m, slot, toks, online) {
+    const c = RP.classById(m.cls), r = RP.roleById(m.role);
+    const placed = !!toks['m_' + m.id];
+    const on = online.has(normName(m.name));
+    return `<div class="${slot === null ? 'slot member loose' : 'slot member filled'}${placed ? ' placed' : ''}${on ? ' online' : ''}"` +
+      `${slot === null ? '' : ` data-slot="${slot}"`} data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(RP.nm(c))} · ${esc(RP.nm(r))}${on ? ' · ' + tr('접속 중') : ''}">` +
+      `<span class="chip" style="background:${c.color}"></span><span class="m-name">${esc(m.name)}</span>` +
+      `<span class="s-role">${RP.short(r)}</span><span class="m-placed">${placed ? '✓' : ''}</span></div>`;
+  }
+
   function renderRoster() {
     const members = list(state.roster);
+    const size = raidSize();
     const toks = tokensOf(phase());
     const online = onlineNames();
-    const sig = JSON.stringify([state.roster, Object.keys(toks).filter(k => k.startsWith('m_')).sort(), [...online].sort()]);
+    const sig = JSON.stringify([state.roster, size, Object.keys(toks).filter(k => k.startsWith('m_')).sort(), [...online].sort(), RP.lang()]);
     if (!changed('roster', sig)) return;
-    $('#rosterCount').textContent = members.length ? tr('{n}명', { n: members.length }) : '';
+    const { slots, assign, overflow } = layoutSlots(members, size);
+    if (assign.length && canEdit()) commit(assign.map(([id, k]) => [['roster', id, 'slot'], k]));
+    $('#rosterCount').textContent = `${members.length}/${size}`;
     $('#roleCounts').innerHTML = RP.ROLES.map(r =>
       `<span>${RP.short(r)} <b>${members.filter(m => m.role === r.id).length}</b></span>`).join('');
-    if (!members.length) {
-      $('#rosterList').innerHTML = '<p class="hint">' + (VIEW_ONLY ? tr('명단이 비어 있습니다.')
-        : tr('위에서 공대원을 추가하거나 <b>일괄 입력</b>으로 한 번에 넣으세요.')) + '</p>';
-      return;
+    $('#sizePick').innerHTML = RP.RAID_SIZES.map(n =>
+      `<button type="button" data-size="${n}" aria-pressed="${n === size}"${VIEW_ONLY ? ' disabled' : ''}>${tr('{n}인', { n })}</button>`).join('');
+    let html = '<div class="party-grid">';
+    for (let p = 0; p < size / 5; p++) {
+      const inParty = slots.slice(p * 5, p * 5 + 5);
+      html += `<div class="party"><div class="party-head" data-party-head="${p}" title="${tr('파티를 지도로 끌어다 놓으면 파티원이 함께 놓입니다')}">` +
+        `<span>${tr('{n}파티', { n: p + 1 })}</span><span class="muted">${inParty.filter(Boolean).length}/5</span></div>`;
+      inParty.forEach((m, i) => {
+        const k = p * 5 + i;
+        html += m ? memberChip(m, k, toks, online)
+          : `<div class="slot vacant" data-slot="${k}">${VIEW_ONLY ? '' : '+ ' + tr('빈칸')}</div>`;
+      });
+      html += '</div>';
     }
-    $('#rosterList').innerHTML = RP.ROLES.map(r => {
-      const ms = members.filter(m => (RP.roleById(m.role).id) === r.id);
-      if (!ms.length) return '';
-      return `<div class="role-group"><h4><span>${RP.nm(r)}</span><span>${ms.length}</span></h4>` + ms.map(m => {
-        const c = RP.classById(m.cls);
-        const placed = !!toks['m_' + m.id];
-        const on = online.has(normName(m.name));
-        return `<div class="member${placed ? ' placed' : ''}${on ? ' online' : ''}" data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(RP.nm(c))}${on ? ' · ' + tr('접속 중') : ''}">` +
-          `<span class="chip" style="background:${c.color}"></span>` +
-          `<span class="m-name">${esc(m.name)}</span><span class="m-cls">${esc(RP.nm(c))}</span>` +
-          `<span class="m-placed">${placed ? '✓' : ''}</span>` +
-          (VIEW_ONLY ? '' : `<button class="m-edit" data-edit="${esc(m.id)}" title="${tr('수정')}">✎</button>`) +
-          '</div>';
-      }).join('') + '</div>';
-    }).join('');
+    html += '</div>';
+    if (overflow.length) {
+      html += `<div class="overflow"><h4>${tr('자리 밖 {n}명', { n: overflow.length })}</h4>` +
+        overflow.map(m => memberChip(m, null, toks, online)).join('') + '</div>';
+    }
+    $('#rosterList').innerHTML = html;
   }
 
   function renderBossTabs() {
@@ -1182,7 +1217,7 @@
 
   // ---------- 팔레트 / 명단에서 지도로 끌어오기 ----------
   function beginDropDrag(e, payload, ghostHtml) {
-    if (!canEdit() || e.button !== 0 || !phase()) return;
+    if (!canEdit() || e.button !== 0) return;
     const sx = e.clientX, sy = e.clientY;
     let ghost = null;
     const move = ev => {
@@ -1201,8 +1236,15 @@
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       if (ev.type === 'pointercancel') { if (ghost) ghost.remove(); return; }
-      if (!ghost) { if (payload.clickPlace) dropPayload(payload, viewCenterPoint(), true); return; }
+      if (!ghost) {
+        if (payload.onClick) payload.onClick();
+        else if (payload.clickPlace) dropPayload(payload, viewCenterPoint(), true);
+        return;
+      }
       ghost.remove();
+      const over = document.elementFromPoint(ev.clientX, ev.clientY);
+      const slotEl = over && over.closest && over.closest('#rosterList [data-slot]');
+      if (slotEl && payload.onSlot) { payload.onSlot(Number(slotEl.dataset.slot)); return; }
       const pt = stagePoint(ev.clientX, ev.clientY);
       if (pt && inViewport(ev.clientX, ev.clientY) && pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1) dropPayload(payload, pt);
     };
@@ -1218,6 +1260,22 @@
     const toks = tokensOf(phase());
     let x = round(clamp(pt.x, 0, 1)), y = round(clamp(pt.y, 0, 1));
     if (p.kind === 'member') set([...base, 'm_' + p.id], { type: 'member', ref: p.id, x, y });
+    else if (p.kind === 'party') {
+      // 놓은 자리를 가운데로 파티원을 둥글게
+      const ms = partyMembers(p.party);
+      if (!ms.length) { toast(tr('빈 파티입니다')); return; }
+      const r = stage.getBoundingClientRect();
+      const px = parseFloat(getComputedStyle(stage).getPropertyValue('--token')) || 28;
+      const R = ms.length === 1 ? 0 : Math.max(36, px * 1.45);
+      commit(ms.map((m, i) => {
+        const a = -Math.PI / 2 + i * 2 * Math.PI / ms.length;
+        return [[...base, 'm_' + m.id], {
+          type: 'member', ref: m.id,
+          x: round(clamp(x + R * Math.cos(a) / r.width, 0.02, 0.98)), y: round(clamp(y + R * Math.sin(a) / r.height, 0.02, 0.98))
+        }];
+      }));
+      toast(tr('{n}파티를 배치했습니다', { n: p.party + 1 }));
+    }
     else if (p.kind === 'marker') {
       if (auto && toks['k_' + p.id]) { flashToken('k_' + p.id); toast(tr('이미 놓은 징표입니다. 지도에서 끌어서 옮기세요')); return; }
       set([...base, 'k_' + p.id], { type: 'marker', ref: Number(p.id), x, y });
@@ -1275,28 +1333,40 @@
   });
 
   $('#rosterList').addEventListener('pointerdown', e => {
-    if (e.target.closest('.m-edit')) return;
-    const it = e.target.closest('.member');
-    if (!it) return;
-    const m = state.roster && state.roster[it.dataset.id];
-    if (!m) return;
-    const c = RP.classById(m.cls);
-    beginDropDrag(e, { kind: 'member', id: it.dataset.id },
-      `<span style="color:${c.color}">●</span> ${esc(m.name)}`);
+    if (!canEdit() || e.button !== 0) return;
+    const head = e.target.closest('[data-party-head]');
+    if (head) {
+      const p = Number(head.dataset.partyHead);
+      const n = partyMembers(p).length;
+      beginDropDrag(e, { kind: 'party', party: p }, esc(tr('{n}파티 · {m}명', { n: p + 1, m: n })));
+      return;
+    }
+    const it = e.target.closest('.member[data-id]');
+    if (it) {
+      const m = state.roster && state.roster[it.dataset.id];
+      if (!m) return;
+      const c = RP.classById(m.cls);
+      const slot = it.dataset.slot !== undefined ? Number(it.dataset.slot) : null;
+      beginDropDrag(e, {
+        kind: 'member', id: it.dataset.id,
+        onClick: () => { if (slot !== null) openSlotEditor(slot); },
+        onSlot: k => moveToSlot(it.dataset.id, k)
+      }, `<span style="color:${c.color}">●</span> ${esc(m.name)}`);
+    }
+  });
+  $('#rosterList').addEventListener('click', e => {
+    const vacant = e.target.closest('.slot.vacant');
+    if (vacant && canEdit()) openSlotEditor(Number(vacant.dataset.slot));
   });
   $('#rosterList').addEventListener('pointerover', e => {
     const it = e.target.closest('.member');
     if (it && !drag) setHighlight(it.dataset.id);
   });
   $('#rosterList').addEventListener('pointerleave', () => { if (!drag) setHighlight(null); });
-  $('#rosterList').addEventListener('click', e => {
-    const ed = e.target.closest('[data-edit]');
-    if (ed) openMemberDialog(ed.dataset.edit);
-  });
 
   // ---------- 지도 이동 / 확대 / 핑 ----------
   viewport.addEventListener('wheel', e => {
-    if (!boss()) return;
+    if (!boss() || e.target.closest('.memo')) return; // 메모 위에서는 메모를 스크롤
     e.preventDefault();
     const r = viewport.getBoundingClientRect();
     zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
@@ -1304,7 +1374,7 @@
 
   viewport.addEventListener('pointerdown', e => {
     if (view.linking) { endLinking(); toast(tr('대상 선택을 취소했습니다')); return; }
-    if (!boss() || e.target.closest('.empty, .stage-note')) return;
+    if (!boss() || e.target.closest('.empty, .memo')) return;
     if ((e.altKey || view.pingMode) && canEdit()) {
       const pt = stagePoint(e.clientX, e.clientY);
       if (pt && pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1) doPing(pt);
@@ -1408,27 +1478,6 @@
   }
 
   // ---------- 명단 ----------
-  function fillSelects() {
-    const cls = RP.CLASSES.map(c => `<option value="${c.id}">${RP.nm(c)}</option>`).join('');
-    const roles = RP.ROLES.map(r => `<option value="${r.id}">${RP.nm(r)}</option>`).join('');
-    const keep = ['mClass', 'eClass', 'mRole', 'eRole'].map(id => $('#' + id).value);
-    $('#mClass').innerHTML = cls; $('#eClass').innerHTML = cls;
-    $('#mRole').innerHTML = roles; $('#eRole').innerHTML = roles;
-    ['mClass', 'eClass', 'mRole', 'eRole'].forEach((id, i) => { if (keep[i]) $('#' + id).value = keep[i]; });
-    if (!keep[2]) $('#mRole').value = RP.CLASSES[0].role;
-  }
-  $('#mClass').addEventListener('change', () => { $('#mRole').value = RP.classById($('#mClass').value).role; });
-
-  $('#addMemberForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const name = $('#mName').value.trim();
-    if (!name) return;
-    if (list(state.roster).some(m => m.name === name)) return toast(tr('이미 있는 이름입니다'));
-    set(['roster', 'm' + RP.uid(6)], { name: name.slice(0, 24), cls: $('#mClass').value, role: $('#mRole').value, order: Date.now() });
-    $('#mName').value = '';
-    $('#mName').focus();
-  });
-
   function parseBulk(text) {
     const out = [];
     text.split(/\r?\n/).forEach(line => {
@@ -1447,42 +1496,155 @@
   $('#bulkBtn').onclick = () => { $('#bulkText').value = ''; $('#bulkDialog').showModal(); };
   $('#bulkDialog').addEventListener('close', () => {
     if ($('#bulkDialog').returnValue !== 'ok') return;
-    const existing = new Set(list(state.roster).map(m => m.name));
+    const members = list(state.roster);
+    const existing = new Set(members.map(m => m.name));
     const rows = parseBulk($('#bulkText').value).filter(r => !existing.has(r.name) && existing.add(r.name));
     if (!rows.length) return toast(tr('추가할 새 이름이 없습니다'));
+    // 빈칸에 차례대로
+    const { slots } = layoutSlots(members, raidSize());
+    const free = slots.map((m, k) => (m ? -1 : k)).filter(k => k >= 0);
+    const fit = rows.slice(0, free.length), left = rows.length - fit.length;
     const t = Date.now();
-    commit(rows.map((r, i) => [['roster', 'm' + RP.uid(6)], Object.assign(r, { order: t + i })]));
-    toast(tr('{n}명을 추가했습니다', { n: rows.length }));
+    if (fit.length) commit(fit.map((r, i) => [['roster', 'm' + RP.uid(6)], Object.assign(r, { slot: free[i], order: t + i })]));
+    toast(left ? tr('자리가 부족해 {n}명은 추가하지 못했습니다', { n: left }) : tr('{n}명을 추가했습니다', { n: fit.length }));
   });
 
-  let editing = null;
-  function openMemberDialog(id) {
-    const m = state.roster && state.roster[id];
-    if (!m || !canEdit()) return;
-    editing = id;
-    $('#eName').value = m.name;
-    $('#eClass').value = m.cls || RP.CLASSES[0].id;
-    $('#eRole').value = RP.roleById(m.role).id;
-    $('#memberDialog').showModal();
+  // 공대원과 모든 보스·단계의 배치를 함께 지움
+  function removeMemberOps(id) {
+    const ops = [[['roster', id], null]];
+    bosses().forEach(b => phases(b).forEach(p => {
+      if (tokensOf(p)['m_' + id]) ops.push(...removeTokenOps(['bosses', b.id, 'phases', p.id], 'm_' + id));
+    }));
+    return ops;
   }
-  $('#memberDialog').addEventListener('close', async () => {
-    const v = $('#memberDialog').returnValue;
-    const id = editing;
-    editing = null;
-    if (!id || !state.roster || !state.roster[id]) return;
-    if (v === 'ok') {
-      const name = $('#eName').value.trim().slice(0, 24) || state.roster[id].name;
-      commit([[['roster', id, 'name'], name], [['roster', id, 'cls'], $('#eClass').value], [['roster', id, 'role'], $('#eRole').value]]);
-    } else if (v === 'delete') {
-      const ok = await ask({ title: tr('{name}님을 명단에서 지울까요?', { name: state.roster[id].name }), message: tr('모든 보스·단계의 배치도 함께 지워집니다.'), ok: tr('삭제'), danger: true });
-      if (!ok || !state.roster || !state.roster[id]) return;
-      const ops = [[['roster', id], null]];
-      bosses().forEach(b => phases(b).forEach(p => {
-        if (tokensOf(p)['m_' + id]) ops.push(...removeTokenOps(['bosses', b.id, 'phases', p.id], 'm_' + id));
-      }));
-      commit(ops);
+
+  // 인원 바꾸기: 줄일 때 자리가 모자라면 빠지는 사람을 알려 주고 확인
+  $('#sizePick').addEventListener('click', async e => {
+    const b = e.target.closest('[data-size]');
+    if (!b || !canEdit()) return;
+    const n = Number(b.dataset.size);
+    if (n === raidSize()) return;
+    const { assign, overflow } = layoutSlots(list(state.roster), n);
+    const ops = [];
+    if (overflow.length) {
+      const ok = await ask({
+        title: tr('공대 인원을 {n}명으로 줄일까요?', { n }),
+        message: tr('자리가 모자라 {n}명이 명단에서 빠집니다: {names}', { n: overflow.length, names: overflow.map(m => m.name).join(', ') }),
+        ok: tr('줄이기'), danger: true
+      });
+      if (!ok) return;
+      overflow.forEach(m => ops.push(...removeMemberOps(m.id)));
     }
+    assign.forEach(([id, k]) => ops.push([['roster', id, 'slot'], k]));
+    ops.push([['meta', 'size'], n]);
+    commit(ops);
   });
+
+  // 자리 옮기기: 다른 사람 자리에 놓으면 서로 바꿈
+  function moveToSlot(id, target) {
+    const { slots } = layoutSlots(list(state.roster), raidSize());
+    const from = slots.findIndex(m => m && m.id === id);
+    if (from === target) return;
+    const other = slots[target];
+    const ops = [[['roster', id, 'slot'], target]];
+    if (other) ops.push([['roster', other.id, 'slot'], from >= 0 ? from : null]);
+    commit(ops);
+  }
+
+  // 빈칸·공대원을 누르면 뜨는 입력창 (이름, 직업, 역할)
+  const se = { slot: null, id: null, cls: '', role: '', roleSet: false };
+  function renderSlotEditor() {
+    $('#seClasses').innerHTML = RP.CLASSES.map(c =>
+      `<button type="button" data-cls="${c.id}" aria-pressed="${se.cls === c.id}"><span class="chip" style="background:${c.color}"></span>${esc(RP.nm(c))}</button>`).join('');
+    $('#seRoles').innerHTML = RP.ROLES.map(r =>
+      `<button type="button" data-role="${r.id}" aria-pressed="${se.role === r.id}">${esc(RP.nm(r))}</button>`).join('');
+  }
+  function openSlotEditor(slot) {
+    if (!canEdit()) return;
+    const m = layoutSlots(list(state.roster), raidSize()).slots[slot];
+    Object.assign(se, { slot, id: m ? m.id : null, cls: m ? (m.cls || '') : '', role: m ? RP.roleById(m.role).id : '', roleSet: !!m });
+    $('#seHead').textContent = tr('{p}파티 · {i}번', { p: Math.floor(slot / 5) + 1, i: slot % 5 + 1 });
+    $('#seName').value = m ? m.name : '';
+    $('#seClear').hidden = !m;
+    renderSlotEditor();
+    const ed = $('#slotEditor');
+    ed.hidden = false;
+    const cell = document.querySelector(`#rosterList [data-slot="${slot}"]`);
+    const r = cell ? cell.getBoundingClientRect() : { left: 16, right: 16, top: 80, bottom: 80 };
+    const w = ed.offsetWidth, h = ed.offsetHeight;
+    let left = r.right + 8;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, r.left);
+    let top = left === r.right + 8 ? r.top - 10 : r.bottom + 6;
+    ed.style.left = clamp(left, 8, window.innerWidth - w - 8) + 'px';
+    ed.style.top = clamp(top, 8, window.innerHeight - h - 8) + 'px';
+    $('#seName').focus();
+  }
+  function closeSlotEditor() {
+    $('#slotEditor').hidden = true;
+    se.slot = null;
+  }
+  $('#seClasses').addEventListener('click', e => {
+    const b = e.target.closest('[data-cls]');
+    if (!b) return;
+    se.cls = b.dataset.cls;
+    if (!se.roleSet) se.role = RP.classById(se.cls).role;
+    renderSlotEditor();
+    $('#seName').focus();
+  });
+  $('#seRoles').addEventListener('click', e => {
+    const b = e.target.closest('[data-role]');
+    if (!b) return;
+    se.role = b.dataset.role;
+    se.roleSet = true;
+    renderSlotEditor();
+    $('#seName').focus();
+  });
+  function saveSlotEditor() {
+    if (se.slot === null) return;
+    let name = $('#seName').value.trim();
+    // "이름 직업 역할" 로 한 줄에 써도 알아들음
+    if (/\s/.test(name)) {
+      const words = name.split(/[\s,\t/|]+/).filter(Boolean);
+      const row = parseBulk(name)[0];
+      name = row.name;
+      if (row.cls) { se.cls = row.cls; if (!se.roleSet) se.role = RP.classById(row.cls).role; }
+      if (words.slice(1).some(w => RP.findRole(w) && !RP.findClass(w))) { se.role = row.role; se.roleSet = true; }
+    }
+    name = name.slice(0, 24);
+    if (!name) { toast(tr('이름을 넣어 주세요')); $('#seName').focus(); return; }
+    if (list(state.roster).some(m => m.name === name && m.id !== se.id)) { toast(tr('이미 있는 이름입니다')); $('#seName').select(); return; }
+    const role = se.role || (se.cls ? RP.classById(se.cls).role : 'melee');
+    if (se.id) {
+      commit([[['roster', se.id, 'name'], name], [['roster', se.id, 'cls'], se.cls], [['roster', se.id, 'role'], role]]);
+      closeSlotEditor();
+      return;
+    }
+    const slot = se.slot;
+    set(['roster', 'm' + RP.uid(6)], { name, cls: se.cls, role, slot, order: Date.now() });
+    // 연달아 입력: 다음 빈칸으로
+    const { slots } = layoutSlots(list(state.roster), raidSize());
+    const next = slots.findIndex((m, k) => k > slot && !m);
+    if (next >= 0) openSlotEditor(next); else closeSlotEditor();
+  }
+  $('#seSave').onclick = saveSlotEditor;
+  $('#seCancel').onclick = closeSlotEditor;
+  $('#seName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); saveSlotEditor(); }
+  });
+  $('#slotEditor').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeSlotEditor(); }
+  });
+  $('#seClear').onclick = async () => {
+    const id = se.id;
+    const m = id && state.roster && state.roster[id];
+    if (!m) return;
+    closeSlotEditor();
+    const ok = await ask({ title: tr('{name}님을 명단에서 지울까요?', { name: m.name }), message: tr('모든 보스·단계의 배치도 함께 지워집니다.'), ok: tr('삭제'), danger: true });
+    if (ok && state.roster && state.roster[id]) commit(removeMemberOps(id));
+  };
+  document.addEventListener('pointerdown', e => {
+    if (!$('#slotEditor').hidden && !e.target.closest('#slotEditor')) closeSlotEditor();
+  }, true);
 
   // 역할별 자동 배치: 보스(가운데) 기준으로 탱은 위, 근딜은 바로 아래, 힐·원딜은 바깥 호
   $('#autoPlaceBtn').onclick = () => {
@@ -1539,12 +1701,7 @@
   // ---------- 오른쪽 패널 ----------
   function renderSide() {
     const b = boss(), p = phase();
-    $('#noteWhere').textContent = b && p ? `· ${b.name} · ${p.name}` : '';
-    const note = (p && p.note) || '';
-    const ni = $('#noteInput');
-    if (document.activeElement !== ni) ni.value = note;
-    ni.disabled = !p;
-    $('#noteView').textContent = note;
+    renderMemo();
     const bn = $('#bossName');
     if (document.activeElement !== bn) bn.value = b ? b.name : '';
     const pn = $('#phaseName');
@@ -1554,10 +1711,97 @@
       btn.classList.toggle('active', m.kind !== 'image' && (m.template || 'circle') === btn.dataset.tpl));
     const mu = $('#mapUrl');
     if (document.activeElement !== mu) mu.value = m.kind === 'image' && /^https?:/.test(m.src || '') ? m.src : '';
-    const sn = $('#stageNote');
-    sn.hidden = !b || !p || !note;
-    if (b && p && note) sn.innerHTML = `<b>${esc(b.name)} · ${esc(p.name)}</b>${esc(note)}`;
   }
+
+  // ---------- 작전 메모: 지도 왼쪽 위에서 접고 펼치기, 굵게·기울임·밑줄·글자 색·목록 ----------
+  // 단계마다 note 에 HTML 로 저장. 그릴 때는 허용한 서식만 남김 (다른 사람이 쓴 내용이므로)
+  const memo = $('#memo'), memoEdit = $('#memoEdit');
+  const MEMO_COLORS = ['#e7e4dc', '#e2b356', '#ff5a4f', '#ff9f43', '#4fc36b', '#4fa8ff', '#b98cff', '#9aa0ab'];
+  const SAFE_TAGS = { B: 'b', STRONG: 'b', I: 'i', EM: 'i', U: 'u', BR: 'br', DIV: 'div', P: 'div', UL: 'ul', OL: 'ol', LI: 'li', SPAN: 'span', FONT: 'span' };
+  const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'IFRAME', 'OBJECT', 'EMBED', 'NOSCRIPT', 'TEXTAREA', 'SELECT', 'SVG', 'MATH', 'TITLE', 'HEAD']);
+  const NOTE_TAG = /<\/?(b|strong|i|em|u|br|div|p|span|font|ul|ol|li)\b/i;
+  const CSS_COLOR = /^(#[0-9a-f]{3,8}|rgba?\(\s*[\d.]+%?\s*,\s*[\d.]+%?\s*,\s*[\d.]+%?\s*(,\s*[\d.]+\s*)?\))$/i;
+  function cleanNote(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = String(html || '');
+    const out = document.createElement('div');
+    const walk = (src, dst) => src.childNodes.forEach(n => {
+      if (n.nodeType === 3) { dst.appendChild(document.createTextNode(n.data)); return; }
+      if (n.nodeType !== 1) return;
+      if (DROP_TAGS.has(n.tagName.toUpperCase())) return; // 스크립트 등은 내용째 버림
+      const tag = SAFE_TAGS[n.tagName];
+      if (!tag) { walk(n, dst); return; } // 모르는 태그는 벗기고 내용만
+      let el = document.createElement(tag);
+      const color = ((n.style && n.style.color) || n.getAttribute('color') || '').trim();
+      if (tag === 'span' && (CSS_COLOR.test(color) || (/^[a-z]{3,20}$/i.test(color) && window.CSS && CSS.supports('color', color)))) el.style.color = color;
+      const weight = n.style && n.style.fontWeight;
+      if (tag === 'span' && (weight === 'bold' || Number(weight) >= 600)) { const bb = document.createElement('b'); el.appendChild(bb); walk(n, bb); dst.appendChild(el); return; }
+      if (tag === 'span' && !el.getAttribute('style')) el = document.createDocumentFragment();
+      walk(n, el);
+      dst.appendChild(el);
+    });
+    walk(tpl.content, out);
+    return out.innerHTML.slice(0, 20000);
+  }
+  // 서식 태그가 있으면 서식 메모, 아니면 예전 글자 메모(줄바꿈 유지)
+  const noteHtml = note => (!note ? '' : NOTE_TAG.test(note) ? cleanNote(note) : esc(note).replace(/\n/g, '<br>'));
+
+  function setMemoOpen(v) {
+    memo.classList.toggle('open', v);
+    $('#memoBody').hidden = !v;
+    $('#memoToggle').setAttribute('aria-expanded', String(v));
+    local.set('rp-memo-open', v ? '1' : '0');
+  }
+  setMemoOpen(local.get('rp-memo-open') === '1');
+  $('#memoToggle').onclick = () => setMemoOpen($('#memoBody').hidden);
+  function buildMemoColors() {
+    $('#memoColors').innerHTML = MEMO_COLORS.map(c =>
+      `<button type="button" class="mc" data-color="${c}" style="background:${c}" title="${tr('글자 색')}" aria-label="${tr('글자 색')}"></button>`).join('');
+  }
+  buildMemoColors();
+
+  function renderMemo() {
+    const b = boss(), p = phase();
+    memo.hidden = !b;
+    $('#memoWhere').textContent = b && p ? `${b.name} · ${p.name}` : '';
+    const html = noteHtml(p && p.note);
+    memo.classList.toggle('has-note', !!html);
+    memoEdit.contentEditable = String(canEdit() && !!p);
+    const key = view.bossId + '/' + view.phaseId;
+    if (memoEdit.dataset.key !== key || (document.activeElement !== memoEdit && memoEdit._html !== html)) {
+      memoEdit.dataset.key = key;
+      memoEdit.dataset.path = JSON.stringify([...phasePath(), 'note']);
+      memoEdit.innerHTML = html;
+      memoEdit._html = html;
+    }
+  }
+  function saveMemo() {
+    if (!canEdit() || !memoEdit.dataset.path) return;
+    const path = JSON.parse(memoEdit.dataset.path);
+    if (!memoEdit.textContent.trim() && !memoEdit.querySelector('li')) memoEdit.innerHTML = '';
+    const html = cleanNote(memoEdit.innerHTML);
+    memoEdit._html = html;
+    debounce('note:' + path.join('/'), () => set(path, html || null), 400);
+  }
+  memoEdit.addEventListener('input', saveMemo);
+  // 붙여넣기는 글자만
+  memoEdit.addEventListener('paste', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+    document.execCommand('insertText', false, text);
+  });
+  // 도구를 눌러도 메모의 선택 영역이 유지되도록
+  ['mousedown', 'pointerdown'].forEach(ev => $('#memoTools').addEventListener(ev, e => { if (e.target.closest('button')) e.preventDefault(); }));
+  $('#memoTools').addEventListener('click', e => {
+    const b = e.target.closest('[data-cmd], [data-color]');
+    if (!b || !canEdit()) return;
+    memoEdit.focus();
+    document.execCommand('styleWithCSS', false, false);
+    if (b.dataset.color) document.execCommand('foreColor', false, b.dataset.color);
+    else document.execCommand(b.dataset.cmd, false, null);
+    saveMemo();
+  });
 
   function buildTemplates() {
     $('#templateBtns').innerHTML = Object.keys(RP.MAP_TEMPLATES).map(k =>
@@ -1613,7 +1857,7 @@
     img.src = url;
   }
   document.addEventListener('paste', e => {
-    if (!canEdit() || e.target.closest && e.target.closest('input, textarea')) return;
+    if (!canEdit() || e.target.closest && e.target.closest('input, textarea, [contenteditable="true"]')) return;
     const item = [...(e.clipboardData ? e.clipboardData.items : [])].find(i => i.type.startsWith('image/'));
     if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
   });
@@ -1633,11 +1877,6 @@
     if (f) loadImageFile(f);
   });
 
-  $('#noteInput').addEventListener('input', e => {
-    const path = [...phasePath(), 'note'];
-    const v = e.target.value.slice(0, 4000);
-    debounce('note', () => set(path, v), 400);
-  });
   $('#bossName').addEventListener('input', e => {
     const id = view.bossId, v = e.target.value.slice(0, 60);
     if (id && v.trim()) debounce('bossName', () => set(['bosses', id, 'name'], v), 300);
@@ -1697,6 +1936,7 @@
       return [['bosses', p.id + (i + 1)], { name: tr(d.name, { n: d.n }), order: i, map: { kind: 'template', template: 'circle' }, phases: ph }];
     });
     if (!(state.meta && state.meta.title)) ops.push([['meta', 'title'], p.id === 'blank' ? tr('공격대 작전판') : tr('{raid} 작전', { raid: tr(p.name) })]);
+    if (!(state.meta && state.meta.size) && p.size) ops.push([['meta', 'size'], p.size]);
     commit(ops);
   });
 
@@ -1825,7 +2065,7 @@
     const bi = bs.findIndex(b => b.id === view.bossId);
     if (bs[bi + d]) goTo(bs[bi + d].id, null);
   }
-  const typing = e => e.target.closest && e.target.closest('input, textarea, select');
+  const typing = e => e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]');
   document.addEventListener('keydown', e => {
     if (typing(e) || document.querySelector('dialog[open]')) return;
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undo(); return; }
@@ -1890,7 +2130,8 @@
     setTool(view.tool);
     renderDrawbar();
     buildTemplates();
-    fillSelects();
+    buildMemoColors();
+    if (!$('#slotEditor').hidden) renderSlotEditor();
     Object.keys(sigs).forEach(k => { sigs[k] = null; });
     if (lastStatus) $('#connText').textContent = tr(lastStatus[1], lastStatus[2]);
     if (splashOpen && ready) $('#splashStatus').textContent = tr('화면을 누르면 시작합니다');
@@ -1904,7 +2145,6 @@
   });
   RP.onLang(applyLanguage);
 
-  fillSelects();
   document.querySelectorAll('#langToggle [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === RP.lang())));
   render();
   window.RP.debug = { get state() { return state; }, view, sync };
