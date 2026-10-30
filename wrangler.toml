@@ -1,0 +1,19 @@
+# Cloudflare Workers 배포 설정
+# Cloudflare 대시보드에서 이 저장소를 연결하면 main 에 올릴 때마다 자동으로 배포됩니다.
+name = "raid-planner"
+main = "worker/index.js"
+compatibility_date = "2025-10-01"
+
+# index.html, css/, js/ 를 그대로 제공 (.assetsignore 에 적힌 파일은 제외)
+[assets]
+directory = "."
+binding = "ASSETS"
+
+# 작전판마다 하나씩 만들어지는 실시간 서버
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

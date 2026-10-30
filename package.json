@@ -5,12 +5,17 @@
   "description": "WoW 공격대 작전판 - 보스별 배치를 실시간으로 공유",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.0"
   }
 }

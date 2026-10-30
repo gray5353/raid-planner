@@ -1,0 +1,15 @@
+.git
+.github
+.wrangler
+.gitignore
+.assetsignore
+.nojekyll
+node_modules
+worker
+data
+dist
+server.js
+package.json
+package-lock.json
+wrangler.toml
+README.md

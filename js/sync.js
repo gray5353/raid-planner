@@ -78,7 +78,8 @@
     };
     function connect() {
       h.onStatus('connecting', '서버 연결 중…');
-      try { ws = new WebSocket(url); } catch (e) { if (onNeverOpened) onNeverOpened(); return; }
+      try { ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + 'room=' + encodeURIComponent(room)); }
+      catch (e) { if (onNeverOpened) onNeverOpened(); return; }
       ws.onopen = () => {
         open = true; everOpened = true; retry = 0;
         send({ t: 'join', room, me });
@@ -109,7 +110,10 @@
     }
     connect();
     const batch = ops => {
-      if (!send({ t: 'batch', ops })) {
+      // Cloudflare 는 메시지 하나가 1MiB 를 넘으면 끊으므로 큰 변경은 하나씩 나눠 보냄
+      const big = ops.length > 1 && JSON.stringify(ops).length > 700000;
+      const sent = big ? ops.every(op => send({ t: 'batch', ops: [op] })) : send({ t: 'batch', ops });
+      if (!sent) {
         ops.forEach(op => { const k = op[0].join('/'); pending.delete(k); pending.set(k, op); });
       }
     };
@@ -403,12 +407,16 @@
     const mode = cfg.mode || 'auto';
     const fbCfg = cfg.firebase || {};
     const mq = cfg.mqtt || {};
+    const hasMqtt = !!(mq.brokers && mq.brokers.length);
+    const fallback = () => hasMqtt ? mqttAdapter(room, handlers, me, mq) : localAdapter(room, handlers, me);
     if (mode === 'firebase' || (mode === 'auto' && fbCfg.databaseURL)) return firebaseAdapter(room, handlers, me, fbCfg);
-    if (mode === 'mqtt' || (mode === 'auto' && mq.brokers && mq.brokers.length)) return mqttAdapter(room, handlers, me, mq);
-    if (mode === 'local' || (mode === 'auto' && !/^https?:$/.test(location.protocol))) return localAdapter(room, handlers, me);
+    if (mode === 'mqtt') return mqttAdapter(room, handlers, me, mq);
+    if (mode === 'local') return localAdapter(room, handlers, me);
+    if (mode === 'auto' && !cfg.wsUrl && !/^https?:$/.test(location.protocol)) return fallback();
 
+    // auto: 같은 주소의 실시간 서버(Cloudflare Worker 또는 server.js)를 먼저 쓰고,
+    // 한 번도 연결되지 않으면(GitHub Pages 처럼 서버가 없는 곳) 공개 MQTT 중계 서버로 전환
     const url = cfg.wsUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
-    // auto: 서버에 한 번도 연결되지 않으면 로컬 모드로 전환
     let inner;
     const proxy = {
       mode: 'ws',
@@ -419,8 +427,8 @@
       guardPresenter: on => inner.guardPresenter(on)
     };
     inner = wsAdapter(room, handlers, me, url, mode === 'auto' ? () => {
-      inner = localAdapter(room, handlers, me);
-      proxy.mode = 'local';
+      inner = fallback();
+      proxy.mode = inner.mode;
     } : null);
     return proxy;
   };

@@ -24,15 +24,28 @@ V 선택 · P 펜 · L 직선 · A 화살표 · O 원 · R 사각형 · T 글자
 
 `js/config.js` 의 `mode` 로 정합니다. 기본값 `auto` 는 아래 순서로 자동 선택합니다.
 
-1. Firebase 설정이 있으면 → **Firebase** (내 데이터베이스, 오래 안정적으로 쓸 때)
-2. 없으면 → **공개 MQTT 중계 서버** (설정 없이 바로 실시간 공유. 기본값)
-3. `server.js` 로 실행하면 → 그 서버의 **웹소켓** (자동)
+1. Firebase 설정이 있으면 → **Firebase**
+2. 같은 주소에 실시간 서버가 있으면 → 그 서버 (**Cloudflare Worker** 또는 `server.js`)
+3. 둘 다 없으면 (GitHub Pages 등) → **공개 MQTT 중계 서버** (설정 없이 바로 동작)
 
 공개 MQTT 중계 서버(`broker.emqx.io`, `broker.hivemq.com`)는 누구나 쓰는 무료 공용 서버입니다.
 - 계정이나 서버 없이 폴더만 올리면 바로 동작합니다.
 - 공용이라 가끔 느리거나 보관 데이터가 지워질 수 있습니다. 지워지면 마지막으로 열었던 사람의 브라우저 사본으로 자동 복구됩니다. 그래도 중요한 작전은 **백업 저장**을 해 두세요.
 - 작전판 주소(`room`)를 아는 사람은 내용을 볼 수 있습니다. 공략 배치 정도의 정보만 올리세요.
 - 오래 쓰다 불안정하면 아래 Firebase 로 바꾸세요. 설정값만 넣으면 됩니다.
+
+### Cloudflare (추천 · 우리 전용 실시간 서버)
+
+이 저장소에는 Cloudflare Workers 용 실시간 서버(`worker/index.js`, `wrangler.toml`)가 들어 있습니다.
+작전판마다 Durable Object 하나가 접속자와 내용을 맡아서, 공개 중계 서버 없이 우리만 쓰는 서버로 동작합니다.
+
+1. <https://dash.cloudflare.com> → **Workers & Pages** → **Create** → **Workers** 쪽의 **Import a repository**
+   (Pages 가 아니라 **Workers** 로 만들어야 실시간 서버까지 올라갑니다)
+2. GitHub 연결 → `gray5353/raid-planner` 선택 → 배포 명령은 기본값 `npx wrangler deploy` 그대로 → **Deploy**
+3. 끝나면 `https://raid-planner.<계정>.workers.dev` 주소가 생깁니다. 이후 `main` 에 올릴 때마다 자동 배포됩니다.
+4. 가지고 있는 도메인을 쓰려면 Worker → **Settings → Domains & Routes** 에서 추가
+
+로컬에서 미리 실행: `npm install` 후 `npm run dev` → <http://localhost:8787>
 
 ### A. Firebase (무료 · 내 데이터베이스)
 
@@ -100,5 +113,7 @@ js/config.js    실시간 공유 설정 (Firebase / 서버 주소)
 js/data.js      직업, 역할, 징표, 레이드 프리셋, 기본 지형
 js/sync.js      실시간 동기화 (Firebase / 웹소켓 / 로컬)
 js/app.js       앱 동작
-server.js       Node 실시간 서버 (선택)
+server.js       Node 실시간 서버 (직접 서버를 운영할 때)
+worker/index.js Cloudflare Workers 실시간 서버 (Durable Objects)
+wrangler.toml   Cloudflare 배포 설정 · .assetsignore 는 공개하지 않을 파일 목록
 ```

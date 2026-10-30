@@ -1,11 +1,12 @@
 // 실시간 공유 설정
 //
 // mode
-//   'auto'     : firebase 설정이 있으면 Firebase, 없으면 공개 MQTT 중계 서버 (설정 없이 바로 동작)
-//                server.js 로 실행하면 자동으로 'ws' 가 됩니다
+//   'auto'     : firebase 설정이 있으면 Firebase.
+//                없으면 같은 주소의 실시간 서버(Cloudflare Worker, server.js)를 쓰고,
+//                서버가 없는 곳(GitHub Pages 등)이면 공개 MQTT 중계 서버로 자동 전환
 //   'firebase' : 내 Firebase Realtime Database (안정적으로 오래 쓸 때 추천)
 //   'mqtt'     : 공개 MQTT 중계 서버 (계정·서버 필요 없음, 무료 공용 서버라 가끔 느리거나 데이터가 지워질 수 있음)
-//   'ws'       : server.js (Node) 웹소켓 서버
+//   'ws'       : 실시간 서버만 사용 (Cloudflare Worker 또는 server.js)
 //   'local'    : 같은 브라우저의 탭끼리만 공유 (테스트용)
 window.RP = window.RP || {};
 window.RP.CONFIG = {

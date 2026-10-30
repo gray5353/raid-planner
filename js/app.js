@@ -1363,7 +1363,9 @@
       const s = data && data.state;
       if (!s || typeof s !== 'object') throw new Error('형식 오류');
       if (!await ask({ title: '백업 파일로 바꿀까요?', message: '현재 작전판 내용이 백업 내용으로 바뀝니다.', ok: '불러오기', danger: true })) return;
-      commit(['meta', 'roster', 'bosses'].map(k => [[k], s[k] || null]).concat([[['present'], null]]));
+      const ops = [[['meta'], s.meta || null], [['roster'], s.roster || null], [['present'], null], [['bosses'], null]];
+      Object.entries(s.bosses || {}).forEach(([id, b]) => ops.push([['bosses', id], b]));
+      commit(ops);
       toast('백업을 불러왔습니다');
     }).catch(() => toast('백업 파일을 읽지 못했습니다'));
   });
