@@ -8,6 +8,7 @@
 | 항목 | 내용 |
 |---|---|
 | 앱 | 브리핑 포에버 (Briefing Forever). WoW: Forever 공격대 브리핑 웹앱. 지도 위에 공대원·보스를 놓고 그리면 같은 주소를 연 사람들에게 실시간으로 보임 |
+| 함께 들어 있는 앱 | **던전 도감** `dungeons.html` (Cloudflare 에서는 `/dungeons`). 던전 선택, 지도·보스 위치, 공략, 획득 아이템, 그리기, 같은 실시간 공유 |
 | 저장소 | <https://github.com/gray5353/raid-planner> (공개), 배포 브랜치 `main` |
 | 지금 운영 중 | GitHub Pages <https://gray5353.github.io/raid-planner/> (실시간은 공개 MQTT 중계 서버로 동작) |
 | 목표 | Cloudflare **Workers** 로 배포 → 실시간을 우리 전용 서버(Durable Objects)로 |
@@ -17,7 +18,8 @@
 ## 구조
 
 ```
-index.html, css/, js/   화면 (정적 파일, 빌드 과정 없음)
+index.html, css/, js/   브리핑 화면 (정적 파일, 빌드 과정 없음)
+dungeons.html           던전 도감 화면 (js/dungeons.js, js/dungeon-data.js, css/dungeons.css)
 worker/index.js         Cloudflare Worker
                           /ws?room=<작전판>  → 작전판마다 Durable Object(Room) 하나가 웹소켓 접속을 받음
                           그 밖의 경로       → 정적 파일 (Workers Assets)
@@ -91,6 +93,7 @@ npx wrangler deploy
    | 주소 | 기대 결과 |
    |---|---|
    | `/` | 200 (앱 화면) |
+   | `/dungeons` | 200 (던전 도감. `/dungeons.html` 은 여기로 307 이동) |
    | `/server.js`, `/wrangler.toml`, `/DEPLOY.md` | 404 (공개되면 안 됨) |
    | `/ws?room=test` (그냥 열기) | 426 "WebSocket only" |
 

@@ -577,3 +577,6 @@ body:not(.view-mode) .view-only { display: none !important; }
   .actions { width: 100%; }
   .name-input { flex: 1; }
 }
+
+/* 링크를 버튼처럼 (예: 브리핑 포에버 ↔ 던전 도감) */
+a.btn { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }

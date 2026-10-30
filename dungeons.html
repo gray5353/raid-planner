@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>던전 도감 · 브리핑 포에버</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/dungeons.css">
+<script>
+  // 화면이 그려지기 전에 언어를 정함 (브리핑 포에버와 같은 설정 공유)
+  (function () {
+    var l = 'ko';
+    try { l = localStorage.getItem('rp-lang') || ((navigator.language || '').toLowerCase().indexOf('ko') === 0 ? 'ko' : 'en'); } catch (e) {}
+    if (l !== 'en') l = 'ko';
+    document.documentElement.lang = l;
+    document.documentElement.classList.add('lang-' + l);
+  })();
+</script>
+</head>
+<body class="atlas-page">
+<header class="topbar atlas-top">
+  <div class="atlas-brand">
+    <button type="button" class="btn gold dun-pick-btn" id="dunPickBtn" aria-haspopup="true" aria-expanded="false">
+      <span>던전 선택</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <h1 class="dun-title" id="dunTitle"></h1>
+    <span class="dun-meta" id="dunMeta"></span>
+  </div>
+  <div class="conn">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">연결 중…</span>
+    <span class="muted" id="peers"></span>
+  </div>
+  <div class="actions">
+    <button id="shareEditBtn" class="btn edit-only" title="편집 가능한 링크 (공대장/부공대장용)">편집 링크</button>
+    <button id="shareViewBtn" class="btn" title="보기 전용 링크 (공대원용)">보기 링크</button>
+    <a class="btn" href="index.html" id="toBriefing" title="공격대 브리핑 앱으로">브리핑 포에버</a>
+    <div class="lang-toggle" id="langToggle" role="group" aria-label="Language">
+      <button type="button" data-lang="ko" lang="ko">KR</button><button type="button" data-lang="en" lang="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<div class="dun-picker" id="dunPicker" hidden>
+  <div class="dp-head">
+    <b>던전</b>
+    <input id="dpLevel" type="number" min="1" max="60" placeholder="내 레벨" aria-label="내 레벨">
+    <button type="button" class="btn small" id="dpLevelOk">확인</button>
+    <button type="button" class="btn small" id="dpReset" title="레벨 필터 지우기" aria-label="레벨 필터 지우기">↺</button>
+  </div>
+  <input id="dpSearch" class="dp-search" placeholder="던전 검색" aria-label="던전 검색">
+  <ul class="dp-list" id="dpList"></ul>
+</div>
+
+<main class="atlas">
+  <section class="atlas-main">
+    <div class="atlas-tools edit-only" id="atlasTools">
+      <div class="at-colors" id="atColors"></div>
+      <div class="at-tools" id="atTools"></div>
+      <label class="at-width">굵기 <input type="range" id="atWidth" min="2" max="16" value="4"></label>
+      <div class="at-acts">
+        <button type="button" class="btn small" id="atUndo">↶ 실행 취소</button>
+        <button type="button" class="btn small" id="atRedo">↷ 다시 실행</button>
+        <button type="button" class="btn small danger" id="atClear">그림 전체 삭제</button>
+        <button type="button" class="btn small" id="atSave">이미지 저장</button>
+      </div>
+    </div>
+    <div class="atlas-view-bar">
+      <button type="button" class="btn small" id="bigBtn">크게 보기</button>
+      <div class="zoom">
+        <button class="btn small" id="zoomOut" title="축소">−</button>
+        <button class="btn small" id="zoomReset" title="화면에 맞춤">100%</button>
+        <button class="btn small" id="zoomIn" title="확대">+</button>
+      </div>
+    </div>
+    <div class="viewport atlas-viewport" id="viewport">
+      <div class="stage" id="stage">
+        <img id="mapImg" class="map-img" alt="" draggable="false" hidden>
+        <div class="map-placeholder" id="mapPlaceholder" hidden></div>
+        <svg id="drawLayer" class="draw" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="pins" id="pinLayer"></div>
+      </div>
+      <div class="boss-legend" id="bossLegend"></div>
+      <div class="drop-hint" id="dropHint" hidden>이미지를 놓으면 이 던전의 지도로 설정됩니다</div>
+    </div>
+    <nav class="boss-tabs-bottom" id="bossTabs" aria-label="보스"></nav>
+  </section>
+
+  <aside class="atlas-side" id="atlasSide">
+    <div class="boss-head" id="bossHead"></div>
+    <p class="boss-loc" id="bossLoc"></p>
+    <section class="boss-tips">
+      <h3 id="tipsTitle">공략</h3>
+      <div class="tips-text" id="tipsText"></div>
+      <div class="tips-edit edit-only" id="tipsEdit" hidden>
+        <textarea id="tipsInput" rows="6" maxlength="3000" placeholder="이 보스의 공략을 적어 주세요 (탱·힐·딜 할 일, 피해야 할 패턴)"></textarea>
+        <div class="row-btns end">
+          <button type="button" class="btn small" id="tipsCancel">취소</button>
+          <button type="button" class="btn small gold" id="tipsSave">저장</button>
+        </div>
+      </div>
+      <div class="row-btns end edit-only">
+        <button type="button" class="btn small" id="tipsEditBtn">공략 수정</button>
+      </div>
+    </section>
+    <section class="boss-loot">
+      <h3>획득 아이템</h3>
+      <div class="loot-wrap"><table class="loot" id="lootTable"></table></div>
+      <form class="loot-add edit-only" id="lootAdd" autocomplete="off">
+        <input id="laName" placeholder="아이템 이름" maxlength="60" required>
+        <input id="laSlot" placeholder="종류 / 부위" maxlength="30">
+        <input id="laLvl" type="number" min="1" max="60" placeholder="레벨">
+        <input id="laStats" placeholder="주요 능력치" maxlength="120">
+        <button class="btn small gold" type="submit">아이템 추가</button>
+      </form>
+    </section>
+    <section class="dun-info" id="dunInfo"></section>
+    <section class="dun-edit edit-only">
+      <h3>지도</h3>
+      <div class="row-btns">
+        <label class="btn small file-btn">지도 이미지 선택<input type="file" id="mapFile" accept="image/*" hidden></label>
+        <button type="button" class="btn small" id="mapUrlBtn">이미지 주소로</button>
+        <button type="button" class="btn small danger" id="mapClear">지도 지우기</button>
+      </div>
+      <p class="hint" data-i18n-html>스크린샷을 <b>Ctrl+V</b>로 붙여넣거나 지도 위로 끌어다 놓아도 됩니다. 보스 번호를 지도로 끌어다 놓으면 위치가 정해집니다.</p>
+      <div class="row-btns">
+        <button type="button" class="btn small" id="exportBtn">데이터 내보내기</button>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<dialog id="askDialog" class="dialog">
+  <form method="dialog">
+    <h3 id="askTitle"></h3>
+    <p id="askMsg" class="hint"></p>
+    <input id="askInput" class="ask-input" maxlength="300">
+    <div class="row-btns end">
+      <button value="cancel" class="btn" id="askCancel">취소</button>
+      <button value="ok" class="btn gold" id="askOk">확인</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="js/config.js"></script>
+<script src="js/i18n-en.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/data.js"></script>
+<script src="js/dungeon-data.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/dungeons.js"></script>
+</body>
+</html>

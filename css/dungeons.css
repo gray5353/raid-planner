@@ -1,0 +1,146 @@
+/* 던전 도감 (style.css 의 색·버튼·대화상자를 함께 씀) */
+.atlas-top { gap: 14px; }
+.atlas-brand { display: flex; align-items: center; gap: 12px; flex: 1 1 320px; min-width: 0; }
+.dun-pick-btn { display: inline-flex; align-items: center; gap: 6px; }
+.dun-pick-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.dun-pick-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dun-title { margin: 0; font-size: 18px; font-weight: 800; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.dun-meta { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.badge-new { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--gold-ink); background: var(--gold); vertical-align: 2px; }
+.badge-beta { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 11px; color: #ffb4ad; border: 1px solid #6b3330; vertical-align: 2px; }
+
+/* 던전 선택 */
+.dun-picker {
+  position: fixed; z-index: 1700; top: 56px; left: max(12px, env(safe-area-inset-left, 0px));
+  width: min(320px, calc(100vw - 24px)); max-height: calc(100vh - 72px); display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 34px rgba(0,0,0,.6);
+}
+.dp-head { display: flex; align-items: center; gap: 6px; }
+.dp-head b { flex: 1; font-size: 15px; }
+.dp-head input { width: 92px; }
+.dp-search { width: 100%; }
+.dp-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: grid; gap: 1px; }
+.dp-list button {
+  width: 100%; display: flex; align-items: center; gap: 8px; text-align: left;
+  padding: 8px 10px; border: 0; border-left: 3px solid transparent; border-radius: 6px; background: none; cursor: pointer; color: var(--text);
+}
+.dp-list button:hover { background: var(--panel-2); }
+.dp-list button[aria-current="true"] { border-left-color: var(--gold); color: var(--gold); background: #231f15; }
+.dp-list .dp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-list .dp-lvl { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dp-list .fit .dp-lvl { color: var(--ok); font-weight: 700; }
+.dp-list .unfit { opacity: .45; }
+.dp-group { padding: 8px 10px 2px; font-size: 11px; color: var(--muted); letter-spacing: .06em; }
+
+/* 본문 */
+.atlas { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 470px; }
+.atlas-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; padding: 10px 12px; }
+.atlas-page.big .atlas { grid-template-columns: minmax(0, 1fr); }
+.atlas-page.big .atlas-side { display: none; }
+.atlas-tools {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+}
+.at-colors { display: flex; gap: 6px; }
+.at-colors button { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+.at-colors button[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px var(--gold); }
+.at-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.at-tools button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+.at-tools button[aria-pressed="true"] { background: #3a2f17; border-color: var(--gold); color: var(--gold); }
+.at-width { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.at-width input { width: 110px; accent-color: var(--gold); }
+.at-acts { display: flex; flex-wrap: wrap; gap: 4px; }
+.atlas-view-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.atlas-viewport { flex: 1; min-height: 320px; border: 1px solid var(--line); border-radius: 10px; }
+.atlas-viewport.tool-draw { cursor: crosshair; }
+.atlas-viewport.tool-erase { cursor: cell; }
+.atlas-viewport.tool-erase .draw g * { pointer-events: visiblePainted; }
+.atlas-viewport.tool-erase .draw g:hover { opacity: .45; }
+.map-placeholder {
+  position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px;
+  color: var(--muted); font-size: 15px; line-height: 1.6;
+  background:
+    linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px) 0 0 / 40px 40px,
+    radial-gradient(circle at 50% 45%, #2a261d, #121212 75%);
+}
+.map-placeholder b { color: var(--gold); display: block; font-size: 17px; margin-bottom: 4px; }
+
+/* 보스 위치 핀 */
+.pins { position: absolute; inset: 0; pointer-events: none; }
+.pin {
+  position: absolute; transform: translate(-50%, -50%) scale(var(--inv)); pointer-events: auto;
+  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  font-weight: 800; font-size: 14px; cursor: pointer; user-select: none; touch-action: none;
+  background: rgba(14,16,20,.88); color: var(--gold); border: 2px solid var(--gold);
+  box-shadow: 0 0 0 3px rgba(0,0,0,.45), 0 4px 10px rgba(0,0,0,.6);
+}
+.pin.active { background: var(--gold); color: var(--gold-ink); box-shadow: 0 0 0 4px rgba(226,179,86,.35), 0 0 18px rgba(226,179,86,.6); }
+.pin.dragging { cursor: grabbing; }
+.boss-legend {
+  position: absolute; top: 10px; right: 10px; z-index: 5; max-width: min(260px, calc(100% - 20px));
+  padding: 10px 12px; background: rgba(14,16,20,.9); border: 1px solid var(--line); border-radius: 10px;
+}
+.boss-legend b { color: var(--gold); font-size: 13px; }
+.boss-legend p { margin: 2px 0 8px; font-size: 12px; color: var(--muted); }
+.legend-nums { display: flex; flex-wrap: wrap; gap: 6px; }
+.legend-nums button {
+  width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--gold); background: none; color: var(--gold);
+  font-weight: 800; cursor: pointer; touch-action: none;
+}
+.legend-nums button.nopos { border-style: dashed; opacity: .75; }
+.legend-nums button.active { background: var(--gold); color: var(--gold-ink); }
+.boss-tabs-bottom { display: flex; flex-wrap: wrap; gap: 8px; }
+.boss-tabs-bottom button {
+  display: inline-flex; align-items: center; gap: 8px; min-width: 150px; padding: 7px 12px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: var(--text);
+}
+.boss-tabs-bottom button .n {
+  width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--muted); display: grid; place-items: center; font-size: 12px; flex: none;
+}
+.boss-tabs-bottom button[aria-current="true"] { border-color: var(--gold); color: var(--gold); background: #231f15; }
+.boss-tabs-bottom button[aria-current="true"] .n { border-color: var(--gold); }
+.boss-tabs-bottom .opt { font-size: 11px; color: var(--muted); }
+
+/* 오른쪽: 공략·아이템 */
+.atlas-side { overflow-y: auto; min-height: 0; border-left: 1px solid var(--line); background: #121419; padding: 22px 24px; }
+.boss-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.boss-head .no { color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.boss-head h2 { margin: 0; font-size: 28px; font-weight: 800; text-wrap: balance; }
+.boss-head .sub { width: 100%; color: var(--muted); font-size: 13px; }
+.boss-loc { margin: 8px 0 18px; color: var(--muted); font-size: 13px; }
+.boss-tips h3, .boss-loot h3, .dun-info h3, .dun-edit h3 { margin: 0 0 8px; font-size: 13px; color: var(--gold); letter-spacing: .02em; }
+.tips-text { font-size: 16px; line-height: 1.75; white-space: pre-wrap; word-break: keep-all; }
+.tips-text.empty-tip { color: var(--muted); font-size: 14px; }
+.tips-edit textarea { width: 100%; font-size: 15px; line-height: 1.6; }
+.boss-tips { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.boss-loot { padding: 18px 0; border-bottom: 1px solid var(--line); }
+.loot-wrap { overflow-x: auto; }
+.loot { width: 100%; border-collapse: collapse; font-size: 14px; }
+.loot th { text-align: left; font-weight: 500; color: var(--muted); background: #0c0d11; padding: 10px 12px; white-space: nowrap; }
+.loot td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.loot td.item { color: #79b0ff; }
+.loot td.lvl { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.loot td.unk { color: #5f6672; }
+.loot .del { background: none; border: 0; color: #ff8c84; cursor: pointer; padding: 0 4px; }
+.loot-empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
+.loot-add { display: grid; grid-template-columns: 2fr 1.4fr .7fr; gap: 6px; margin-top: 10px; }
+.loot-add #laStats { grid-column: 1 / 3; }
+.dun-info { padding: 18px 0; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.dun-info p { margin: 0 0 8px; }
+.dun-info ul { margin: 4px 0 0; padding-left: 18px; }
+.dun-info a { color: #79b0ff; }
+.dun-edit { padding: 18px 0; }
+
+@media (max-width: 1000px) {
+  .atlas { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(420px, 1fr) auto; overflow-y: auto; }
+  .atlas-side { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 720px) {
+  body.atlas-page { overflow: auto; height: auto; }
+  .atlas { display: block; }
+  .atlas-viewport { height: 60vh; flex: none; }
+  .dun-meta { display: none; }
+  .boss-tabs-bottom button { min-width: 0; }
+  .loot-add { grid-template-columns: 1fr 1fr; }
+}
