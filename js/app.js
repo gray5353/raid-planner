@@ -68,6 +68,7 @@
       state = s || {};
       if (drag && drag.moved && !drag.out) RP.applyOp(state, drag.path, clone(drag.value));
       ready = true;
+      if (!namePromptQueued) { namePromptQueued = true; setTimeout(promptNameOnce, 500); }
       scheduleRender();
     },
     onOp(p, v) {
@@ -182,11 +183,56 @@
   }
 
   function renderPeers() {
-    const el = $('#peers');
-    if (!peers.length) { el.textContent = ''; el.title = ''; return; }
-    el.textContent = `· 접속 ${peers.length}명`;
-    el.title = peers.map(p => (p && p.name) || '이름 없음').join(', ');
+    const btn = $('#peersBtn');
+    btn.hidden = !peers.length;
+    if (!peers.length) { closePeerPanel(); return; }
+    $('#peers').textContent = `접속 ${peers.length}명`;
+    if (!$('#peerPanel').hidden) renderPeerPanel();
   }
+
+  // 접속자 목록: 나 → 발표자 → 이름순, 이름 없는 사람은 뒤로
+  function renderPeerPanel() {
+    const pr = presentOn() ? state.present.clientId : null;
+    const rosterNames = new Set(list(state.roster).map(m => normName(m.name)));
+    const rows = peers.filter(p => p && p.id).map(p => ({
+      id: p.id, name: p.id === me.id ? me.name : String(p.name || ''),
+      color: /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '#9aa0ab', me: p.id === me.id, presenter: p.id === pr
+    })).sort((a, b) => (b.me - a.me) || (b.presenter - a.presenter) || (!a.name - !b.name) || a.name.localeCompare(b.name, 'ko'));
+    const unnamed = rows.filter(r => !r.name).length;
+    $('#peerPanel').innerHTML =
+      `<div class="pp-head">접속 중 <b>${rows.length}</b>명${unnamed ? ` <span class="muted">· 이름 없음 ${unnamed}</span>` : ''}</div>` +
+      '<ul class="pp-list">' + rows.map(r =>
+        `<li><span class="pp-dot" style="background:${r.color}"></span>` +
+        `<span class="pp-name${r.name ? '' : ' muted'}">${r.name ? esc(r.name) : '이름 없음'}</span>` +
+        (r.me ? '<span class="pp-tag me">나</span>' : '') +
+        (r.presenter ? '<span class="pp-tag">발표 중</span>' : '') +
+        (r.name && rosterNames.has(normName(r.name)) ? '<span class="pp-tag ok" title="공대 명단에 있는 이름">명단</span>' : '') +
+        '</li>').join('') + '</ul>' +
+      `<button class="btn small" id="ppRename" type="button">${me.name ? '내 이름 바꾸기' : '내 이름 넣기'}</button>`;
+  }
+  function closePeerPanel() {
+    $('#peerPanel').hidden = true;
+    $('#peersBtn').setAttribute('aria-expanded', 'false');
+  }
+  $('#peersBtn').addEventListener('click', e => {
+    e.stopPropagation();
+    const panel = $('#peerPanel');
+    if (!panel.hidden) return closePeerPanel();
+    renderPeerPanel();
+    const r = $('#peersBtn').getBoundingClientRect();
+    panel.style.top = (r.bottom + 6) + 'px';
+    panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 268)) + 'px';
+    panel.hidden = false;
+    $('#peersBtn').setAttribute('aria-expanded', 'true');
+  });
+  $('#peerPanel').addEventListener('click', e => {
+    if (e.target.closest('#ppRename')) { closePeerPanel(); askMyName(false); }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!$('#peerPanel').hidden && !e.target.closest('#peerPanel, #peersBtn')) closePeerPanel();
+  });
+  const normName = n => String(n || '').trim().toLowerCase();
+  const onlineNames = () => new Set(peers.filter(p => p && p.name).map(p => normName(p.id === me.id ? me.name : p.name)));
 
   function renderBanner() {
     const pr = state.present;
@@ -213,7 +259,8 @@
   function renderRoster() {
     const members = list(state.roster);
     const toks = tokensOf(phase());
-    const sig = JSON.stringify([state.roster, Object.keys(toks).filter(k => k.startsWith('m_')).sort()]);
+    const online = onlineNames();
+    const sig = JSON.stringify([state.roster, Object.keys(toks).filter(k => k.startsWith('m_')).sort(), [...online].sort()]);
     if (!changed('roster', sig)) return;
     $('#rosterCount').textContent = members.length ? `${members.length}명` : '';
     $('#roleCounts').innerHTML = RP.ROLES.map(r =>
@@ -229,7 +276,8 @@
       return `<div class="role-group"><h4><span>${r.name}</span><span>${ms.length}</span></h4>` + ms.map(m => {
         const c = RP.classById(m.cls);
         const placed = !!toks['m_' + m.id];
-        return `<div class="member${placed ? ' placed' : ''}" data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(c.name)}">` +
+        const on = online.has(normName(m.name));
+        return `<div class="member${placed ? ' placed' : ''}${on ? ' online' : ''}" data-id="${esc(m.id)}" title="${esc(m.name)} · ${esc(c.name)}${on ? ' · 접속 중' : ''}">` +
           `<span class="chip" style="background:${c.color}"></span>` +
           `<span class="m-name">${esc(m.name)}</span><span class="m-cls">${esc(c.name)}</span>` +
           `<span class="m-placed">${placed ? '✓' : ''}</span>` +
@@ -1289,10 +1337,25 @@
   // ---------- 발표 ----------
   async function askName() {
     if (me.name) return true;
-    const n = await ask({ title: '발표자로 보일 이름', value: '' });
-    if (!n || !n.trim()) return false;
+    return askMyName(false);
+  }
+  // 이름 입력 (명단에 있는 이름을 목록에서 고를 수 있음)
+  async function askMyName(first) {
+    $('#rosterNames').innerHTML = list(state.roster).map(m => `<option value="${esc(m.name)}"></option>`).join('');
+    const n = await ask({
+      title: first ? '이름을 입력하세요' : '내 이름',
+      message: '접속자 목록에 이 이름으로 보입니다. 게임 캐릭터 이름을 적어 주세요.',
+      value: me.name || '', ok: first ? '입장' : '저장', cancel: first ? '나중에' : '취소', suggest: 'rosterNames'
+    });
+    if (n === null || !n.trim()) return false;
     setMyName(n.trim());
     return true;
+  }
+  let namePromptQueued = false;
+  function promptNameOnce() {
+    if (me.name || session.get('rp-name-asked') || document.querySelector('dialog[open]')) return;
+    session.set('rp-name-asked', '1');
+    askMyName(true);
   }
   function setMyName(n) {
     me.name = n.slice(0, 20);
@@ -1300,6 +1363,9 @@
     local.set('rp-name', me.name);
     sync.setPresence({ name: me.name });
     if (presenting()) set(['present', 'name'], me.name);
+    sigs.roster = null;
+    renderPeers();
+    scheduleRender();
   }
   $('#myName').value = me.name;
   $('#myName').addEventListener('change', e => setMyName(e.target.value.trim()));
@@ -1415,7 +1481,7 @@
 
   // ---------- 대화상자 / 알림 ----------
   // value 가 있으면 입력칸을 보여 주고 입력값을, 없으면 확인 여부(true)를 돌려줍니다. 취소는 null.
-  function ask({ title, message = '', value = null, ok = '확인', danger = false }) {
+  function ask({ title, message = '', value = null, ok = '확인', cancel = '취소', danger = false, suggest = null }) {
     return new Promise(resolve => {
       const d = $('#askDialog'), input = $('#askInput');
       $('#askTitle').textContent = title;
@@ -1423,6 +1489,8 @@
       $('#askMsg').hidden = !message;
       input.hidden = value === null;
       input.value = value || '';
+      if (suggest) input.setAttribute('list', suggest); else input.removeAttribute('list');
+      $('#askCancel').textContent = cancel;
       $('#askOk').textContent = ok;
       $('#askOk').className = 'btn ' + (danger ? 'danger' : 'gold');
       d.returnValue = '';

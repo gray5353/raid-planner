@@ -15,7 +15,7 @@
   <div class="conn" id="conn" title="">
     <span class="dot" id="connDot"></span>
     <span id="connText">연결 중…</span>
-    <span class="peers" id="peers"></span>
+    <button class="peers-btn" id="peersBtn" type="button" hidden aria-haspopup="true" aria-expanded="false" title="누가 접속했는지 보기"><span id="peers"></span> ▾</button>
   </div>
   <div class="actions">
     <input id="myName" class="name-input" placeholder="내 이름" maxlength="20" aria-label="내 이름">
@@ -197,13 +197,16 @@
   </form>
 </dialog>
 
+<div class="peer-panel" id="peerPanel" hidden></div>
+<datalist id="rosterNames"></datalist>
+
 <dialog id="askDialog" class="dialog">
   <form method="dialog">
     <h3 id="askTitle"></h3>
     <p id="askMsg" class="hint"></p>
     <input id="askInput" class="ask-input" maxlength="300">
     <div class="row-btns end">
-      <button value="cancel" class="btn">취소</button>
+      <button value="cancel" class="btn" id="askCancel">취소</button>
       <button value="ok" class="btn gold" id="askOk">확인</button>
     </div>
   </form>
