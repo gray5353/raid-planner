@@ -238,6 +238,56 @@ code { background: var(--panel-2); padding: 0 4px; border-radius: 4px; }
 .width-line { width: 18px; border-radius: 4px; background: currentColor; }
 
 .draw { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+/* 행동 연결 (공격·탱·힐) */
+.fx-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; transition: opacity .2s; }
+.fx-layer.hide { opacity: 0; }
+.fx-preview { stroke: var(--gold); stroke-opacity: .8; stroke-linecap: round; }
+@property --press { syntax: '<percentage>'; inherits: false; initial-value: 0%; }
+.token.pressing .disc::after {
+  content: ""; position: absolute; inset: -8px; border-radius: 50%;
+  background: conic-gradient(var(--gold) var(--press), rgba(255,255,255,.14) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  animation: press 2s linear forwards;
+}
+@keyframes press { to { --press: 100%; } }
+.viewport.linking { cursor: crosshair; }
+.viewport.linking .token { opacity: .3; }
+.viewport.linking .token.link-src, .viewport.linking .token.target-ok { opacity: 1; }
+.viewport.linking .token.target-ok { cursor: pointer; }
+.token.target-ok .disc { box-shadow: 0 0 0 3px var(--tc), 0 0 16px var(--tc); }
+.viewport.linking { --tc: #ff6b5e; }
+.viewport.linking.heal { --tc: #5cf08a; }
+.viewport.linking.interrupt { --tc: #b9a0ff; }
+.token.link-src .disc { outline: 3px solid var(--gold); outline-offset: 3px; }
+.link-hint {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
+  background: rgba(14,16,20,.92); border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; white-space: nowrap; max-width: calc(100% - 24px);
+  overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}
+.link-hint b { color: var(--gold); }
+.action-menu {
+  position: fixed; z-index: 1600; display: grid; gap: 6px; padding: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.55);
+}
+.am-title { font-size: 12px; color: var(--muted); text-align: center; }
+.am-title b { color: var(--text); }
+.am-btns { display: flex; gap: 6px; }
+.am-btns button {
+  display: grid; justify-items: center; gap: 2px; width: 58px; padding: 7px 0 5px;
+  border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; font-size: 12px;
+}
+.am-btns button:hover, .am-btns button:focus-visible { border-color: currentColor; outline: none; }
+.am-btns button:disabled { opacity: .35; cursor: default; border-color: var(--line); }
+.am-btns svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.am-btns [data-act="attack"] { color: #ff8070; }
+.am-btns [data-act="tank"] { color: #ffb347; }
+.am-btns [data-act="heal"] { color: #5cf08a; }
+.am-btns [data-act="interrupt"] { color: #b9a0ff; }
+.am-btns [data-act="clear"] { color: var(--muted); }
 .draw .hit { stroke: transparent; fill: none; }
 .viewport.tool-draw { cursor: crosshair; }
 .viewport.tool-draw .tokens, .viewport.tool-draw .tokens * { pointer-events: none !important; }
@@ -280,7 +330,8 @@ code { background: var(--panel-2); padding: 0 4px; border-radius: 4px; }
   z-index: 2;
 }
 .view-mode .token { cursor: default; }
-.token { transition: left .1s linear, top .1s linear; }
+.token { transition: left .1s linear, top .1s linear, opacity .15s; -webkit-touch-callout: none; }
+.token .disc { position: relative; }
 .tokens.animate .token { transition: left .45s ease, top .45s ease; }
 .token.dragging, .tokens.animate .token.dragging { cursor: grabbing; z-index: 10; transition: none; }
 .token .disc {

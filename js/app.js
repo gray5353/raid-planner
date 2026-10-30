@@ -40,7 +40,8 @@
   let ready = false;
   let peers = [];
   let drag = null; // 지도 위 토큰을 끄는 중
-  const view = { bossId: null, phaseId: null, follow: true, zoom: 1, panX: 0, panY: 0, pingMode: false, tool: 'select' };
+  let fxReady = false; // 이펙트 층이 한 번이라도 그려졌는지 (확대·축소 때 다시 그리기용)
+  const view = { bossId: null, phaseId: null, follow: true, zoom: 1, panX: 0, panY: 0, pingMode: false, tool: 'select', linking: null };
   const getIn = (obj, path) => path.reduce((o, k) => (o && typeof o === 'object') ? o[k] : undefined, obj);
 
   const list = obj => Object.keys(obj || {})
@@ -142,6 +143,7 @@
     renderMap();
     renderDrawings();
     renderTokens();
+    renderEffects();
     renderSide();
     renderEmpty();
   }
@@ -230,7 +232,7 @@
   });
   document.addEventListener('pointerdown', e => {
     if (!$('#peerPanel').hidden && !e.target.closest('#peerPanel, #peersBtn')) closePeerPanel();
-  });
+  }, true);
   const normName = n => String(n || '').trim().toLowerCase();
   const onlineNames = () => new Set(peers.filter(p => p && p.name).map(p => normName(p.id === me.id ? me.name : p.name)));
 
@@ -374,6 +376,7 @@
     if (h !== svgH) {
       svgH = h;
       drawSvg.setAttribute('viewBox', `0 0 ${SVG_W} ${svgH}`);
+      fxSvg.setAttribute('viewBox', `0 0 ${SVG_W} ${svgH}`);
       renderDrawings();
     }
     applyTransform();
@@ -382,6 +385,7 @@
     stage.style.transform = `translate(${baseX + view.panX}px, ${baseY + view.panY}px) scale(${view.zoom})`;
     stage.style.setProperty('--inv', String(1 / view.zoom));
     $('#zoomReset').textContent = Math.round(view.zoom * 100) + '%';
+    if (typeof renderEffects === 'function' && fxReady) renderEffects();
   }
   function zoomAt(cx, cy, factor) {
     const z = clamp(view.zoom * factor, 0.5, 8);
@@ -447,9 +451,12 @@
     if (key !== lastPhaseKey) {
       if (lastPhaseKey.split('/')[0] === view.bossId) {
         tokenLayer.classList.add('animate');
-        setTimeout(() => tokenLayer.classList.remove('animate'), 600);
+        fxSvg.classList.add('hide');
+        setTimeout(() => { tokenLayer.classList.remove('animate'); fxSvg.classList.remove('hide'); }, 600);
       }
       lastPhaseKey = key;
+      if (view.linking) endLinking();
+      closeActionMenu();
     }
     const toks = tokensOf(phase());
     const seen = new Set();
@@ -469,8 +476,11 @@
         tokenEls.set(id, el);
       }
       if (el._html !== info.html) { el.innerHTML = info.html; el._html = info.html; }
-      const cls = 'token ' + info.cls + (dragging ? ' dragging' : '') +
+      const cls = 'token ' + info.cls + (dragging && drag.moved ? ' dragging' : '') +
         (dragging && drag.out ? ' remove-hint' : '') +
+        (dragging && drag.lp && !drag.moved ? ' pressing' : '') +
+        (view.linking && view.linking.from === id ? ' link-src' : '') +
+        (view.linking && linkTargetOk(id) ? ' target-ok' : '') +
         (info.member && info.member === hlMember ? ' hl' : '');
       if (el.className !== cls) el.className = cls;
       el.title = info.title;
@@ -507,23 +517,49 @@
   tokenLayer.addEventListener('pointerdown', e => {
     const el = e.target.closest('.token');
     if (!el) return;
+    if (view.linking) { e.stopPropagation(); e.preventDefault(); pickLinkTarget(el.dataset.id); return; }
     if (e.altKey || view.pingMode || view.tool !== 'select' || spaceHeld) return; // 핑·지우개·지도 이동은 viewport 가 처리
     e.stopPropagation();
     if (!canEdit() || e.button !== 0) return;
     const id = el.dataset.id;
     const t = tokensOf(phase())[id];
     if (!t) return;
-    drag = { id, el, path: [...phasePath(), 'tokens', id], value: clone(t), sx: e.clientX, sy: e.clientY, moved: false, out: false };
+    drag = { id, el, path: [...phasePath(), 'tokens', id], value: clone(t), sx: e.clientX, sy: e.clientY, moved: false, out: false, lp: 0 };
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
     window.addEventListener('pointermove', onTokenMove);
     window.addEventListener('pointerup', onTokenUp);
     window.addEventListener('pointercancel', onTokenUp);
+    // 공대원을 2초 누르고 있으면 공격·탱·힐 메뉴
+    if (t.type === 'member') {
+      drag.lp = setTimeout(() => {
+        if (!drag || drag.id !== id || drag.moved) return;
+        stopTokenDrag();
+        openActionMenu(id);
+      }, 2000);
+      scheduleRender();
+    }
   });
+  function stopTokenDrag() {
+    window.removeEventListener('pointermove', onTokenMove);
+    window.removeEventListener('pointerup', onTokenUp);
+    window.removeEventListener('pointercancel', onTokenUp);
+    if (!drag) return null;
+    const d = drag;
+    drag = null;
+    clearTimeout(d.lp);
+    endThrottle(d.path);
+    d.el.classList.remove('dragging', 'remove-hint', 'pressing');
+    scheduleRender();
+    return d;
+  }
   function onTokenMove(e) {
     if (!drag) return;
     if (!drag.moved) {
-      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 3) return;
+      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
       drag.moved = true;
+      clearTimeout(drag.lp);
+      drag.lp = 0;
+      drag.el.classList.remove('pressing');
       drag.el.classList.add('dragging');
     }
     const pt = stagePoint(e.clientX, e.clientY);
@@ -535,18 +571,13 @@
     drag.el.style.top = (pt.y * 100) + '%';
     drag.value = Object.assign({}, drag.value, { x: round(clamp(pt.x, 0, 1)), y: round(clamp(pt.y, 0, 1)) });
     if (!out) setThrottled(drag.path, drag.value);
+    renderEffects();
   }
   function onTokenUp(e) {
-    window.removeEventListener('pointermove', onTokenMove);
-    window.removeEventListener('pointerup', onTokenUp);
-    window.removeEventListener('pointercancel', onTokenUp);
-    if (!drag) return;
-    const d = drag;
-    drag = null;
-    endThrottle(d.path);
-    d.el.classList.remove('dragging', 'remove-hint');
+    const d = stopTokenDrag();
+    if (!d) return;
     if (d.moved && e.type !== 'pointercancel') {
-      if (d.out) { set(d.path, null); toast('배치를 해제했습니다'); }
+      if (d.out) { commit(removeTokenOps(d.path.slice(0, 4), d.id)); toast('배치를 해제했습니다'); }
       else set(d.path, d.value);
     } else if (!d.moved && e.type !== 'pointercancel') {
       renameToken(d.path);
@@ -566,12 +597,25 @@
     else if (!v) set(path.concat('label'), (t.type === 'boss' ? '보스 ' : '쫄 ') + (t.n || 1));
     else set(path.concat('label'), v);
   }
+  // 우클릭으로 삭제 (휴대폰에서 길게 눌렀을 때 뜨는 메뉴로 지워지지 않게 마우스일 때만)
+  let lastPointerType = 'mouse';
+  document.addEventListener('pointerdown', e => { lastPointerType = e.pointerType; }, true);
   tokenLayer.addEventListener('contextmenu', e => {
     const el = e.target.closest('.token');
     if (!el || !canEdit()) return;
     e.preventDefault();
-    set([...phasePath(), 'tokens', el.dataset.id], null);
+    if (lastPointerType !== 'mouse' || view.linking) return;
+    commit(removeTokenOps(phasePath(), el.dataset.id));
   });
+  // 토큰을 지울 때 그 토큰과 이어진 행동(공격·탱·힐)도 함께 지움
+  function removeTokenOps(base, tokenId) {
+    const ph = getIn(state, base);
+    const links = (ph && ph.links) || {};
+    const ops = [[base.concat('tokens', tokenId), null]];
+    const gone = Object.keys(links).filter(lid => links[lid] && (links[lid].from === tokenId || links[lid].to === tokenId));
+    gone.forEach(lid => ops.push([base.concat('links', lid), null]));
+    return ops.concat(renumberOps(base, links, gone));
+  }
 
   // ---------- 그리기 (그림판) ----------
   // 그림은 단계마다 draw/{id} 에 저장. 좌표는 지도 기준 0~1, 굵기는 지도 폭 1000 기준.
@@ -826,6 +870,282 @@
   setTool('select');
   renderDrawbar();
 
+  // ---------- 행동 연결: 공격·탱·힐 이펙트 ----------
+  // 단계마다 links/l_<공대원토큰> = { from, to, kind } (공대원 한 명당 공격·탱·힐 중 하나)
+  //          links/i_<공대원토큰> = { from, to, kind: 'interrupt', n } (차단은 따로, 같은 대상에 순서 번호)
+  //   탱: 탱커 → 보스 사이 흐르는 사슬과 방패, 보스 둘레 어그로 고리
+  //   공격: 원딜·힐러는 투명한 공격 선 위로 발사체, 근딜·탱커는 대상 앞 베기 자국
+  //   힐: 힐러 → 공대원 사이 투명한 힐링 선과 날아가는 + 표시, 대상 둘레 초록 고리
+  //   차단: 보라색 점선과 순서 번호, 대상 모서리에 깜빡이는 ⊘
+  const fxSvg = $('#fxLayer');
+  const fxPreview = $('#fxPreview');
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const KIND_NAME = { attack: '공격', tank: '탱', heal: '힐', interrupt: '차단' };
+  const HEAL_COLOR = '#5cf08a', TANK_COLOR = '#ffb347', KICK_COLOR = '#b9a0ff';
+  const linkId = (kind, from) => (kind === 'interrupt' ? 'i_' : 'l_') + from;
+  const fxEls = new Map();
+  let menuFor = null;
+
+  const linksOf = p => (p && p.links) || {};
+  const isEnemy = t => !!t && (t.type === 'boss' || t.type === 'add' || t.type === 'marker');
+  const memberOf = t => (t && t.type === 'member' && state.roster && state.roster[t.ref]) || null;
+
+  function linkTargetOk(id) {
+    const L = view.linking;
+    if (!L || id === L.from) return false;
+    const t = tokensOf(phase())[id];
+    return L.kind === 'heal' ? !!memberOf(t) : isEnemy(t);
+  }
+  function tokenPos(id) {
+    if (drag && drag.id === id && drag.moved) return drag.value;
+    const t = tokensOf(phase())[id];
+    return t && typeof t.x === 'number' ? t : null;
+  }
+  function fxType(l, from) {
+    if (l.kind === 'heal' || l.kind === 'tank' || l.kind === 'interrupt') return l.kind;
+    const role = RP.roleById(memberOf(from).role).id;
+    return role === 'ranged' || role === 'healer' ? 'ranged' : 'melee';
+  }
+  // 대상 토큰의 화면상 반지름(px): 이펙트가 토큰 가장자리에 맞도록
+  function targetRadius(t) {
+    const px = parseFloat(getComputedStyle(stage).getPropertyValue('--token')) || 28;
+    return px * (t.type === 'boss' ? 0.8 : t.type === 'add' ? 0.4 : t.type === 'marker' ? 0.55 : 0.5);
+  }
+
+  function fxMarkup(type, c, k, R, num) {
+    const n = v => (v * k).toFixed(1);
+    const a = s => (reduceMotion ? '' : s);
+    if (type === 'tank') {
+      return `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".2" stroke-width="${n(12)}" stroke-linecap="round"/>` +
+        `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".85" stroke-width="${n(4)}" stroke-dasharray="${n(14)} ${n(9)}" stroke-linecap="round">` +
+        a(`<animate attributeName="stroke-dashoffset" from="0" to="${n(-46)}" dur="0.9s" repeatCount="indefinite"/>`) + '</path>' +
+        `<g data-p="target"><circle r="${n(R + 8)}" fill="none" stroke="#ff5a3c" stroke-width="${n(3)}" stroke-opacity=".8">` +
+        a(`<animate attributeName="r" values="${n(R + 6)};${n(R + 20)};${n(R + 6)}" dur="1.4s" repeatCount="indefinite"/>` +
+          '<animate attributeName="stroke-opacity" values=".9;.15;.9" dur="1.4s" repeatCount="indefinite"/>') + '</circle></g>' +
+        `<g data-p="mid"><g transform="scale(${k.toFixed(3)})"><path d="M0 -13 L11 -8 V1 C11 8 6 12 0 15 C-6 12 -11 8 -11 1 V-8 Z" fill="${c}" stroke="#3a2200" stroke-width="2"/>` +
+        '<path d="M0 -7 V9 M-5 0 H5" stroke="#3a2200" stroke-width="2" stroke-linecap="round"/></g></g>';
+    }
+    if (type === 'heal') {
+      const plus = [0, 1, 2].map(i => `<g>${a(`<animateMotion data-p="motion" dur="1.2s" begin="-${(i * 0.4).toFixed(1)}s" repeatCount="indefinite" path="M0 0"/>`)}` +
+        `<path d="M${n(-5)} 0H${n(5)}M0 ${n(-5)}V${n(5)}" stroke="#e2ffea" stroke-width="${n(3)}" stroke-linecap="round"/></g>`).join('');
+      return `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".16" stroke-width="${n(12)}" stroke-linecap="round"/>` +
+        `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".55" stroke-width="${n(3)}" stroke-dasharray="${n(7)} ${n(7)}" stroke-linecap="round">` +
+        a(`<animate attributeName="stroke-dashoffset" from="0" to="${n(-28)}" dur="0.8s" repeatCount="indefinite"/>`) + '</path>' +
+        (reduceMotion ? '' : plus) +
+        `<g data-p="target"><circle r="${n(R + 6)}" fill="${c}" fill-opacity=".12" stroke="${c}" stroke-opacity=".8" stroke-width="${n(2.5)}">` +
+        a(`<animate attributeName="r" values="${n(R + 4)};${n(R + 14)};${n(R + 4)}" dur="1.6s" repeatCount="indefinite"/>`) + '</circle></g>';
+    }
+    if (type === 'ranged') {
+      const bolts = [0, 1, 2].map(i => `<g>${a(`<animateMotion data-p="motion" dur="0.9s" begin="-${(i * 0.3).toFixed(1)}s" repeatCount="indefinite" path="M0 0"/>`)}` +
+        `<circle r="${n(9)}" fill="${c}" fill-opacity=".28"/><circle r="${n(4.5)}" fill="${c}"/><circle r="${n(2)}" fill="#fff"/></g>`).join('');
+      return `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".3" stroke-width="${n(3)}" stroke-linecap="round"/>` +
+        (reduceMotion ? '' : bolts) +
+        `<g data-p="target"><circle r="${n(R + 4)}" fill="none" stroke="${c}" stroke-width="${n(3)}" stroke-opacity="${reduceMotion ? '.7' : '0'}">` +
+        a(`<animate attributeName="r" values="${n(R)};${n(R + 16)}" dur="0.3s" repeatCount="indefinite"/>` +
+          '<animate attributeName="stroke-opacity" values=".8;0" dur="0.3s" repeatCount="indefinite"/>') + '</circle></g>';
+    }
+    if (type === 'interrupt') {
+      return `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".45" stroke-width="${n(2.5)}" stroke-dasharray="${n(3)} ${n(6)}" stroke-linecap="round">` +
+        a(`<animate attributeName="stroke-dashoffset" from="0" to="${n(-18)}" dur="0.6s" repeatCount="indefinite"/>`) + '</path>' +
+        `<g data-p="corner"><g transform="scale(${k.toFixed(3)})"><circle r="9" fill="#1b1030" stroke="${c}" stroke-width="2.5"/><path d="M-5.5 -5.5L5.5 5.5" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>` +
+        a('<animate attributeName="opacity" values="1;.35;1" dur="1s" repeatCount="indefinite"/>') + '</g></g>' +
+        `<g data-p="badge"><g transform="scale(${k.toFixed(3)})"><circle r="9" fill="${c}" stroke="#1b1030" stroke-width="2"/>` +
+        `<text y="4" text-anchor="middle" font-size="11" font-weight="800" fill="#1b1030" font-family="sans-serif">${num}</text></g></g>`;
+    }
+    // 근거리: 대상 앞(공격자 쪽)에서 베기 자국이 번쩍임
+    const slash = (d, col, w, begin) => `<path d="${d}" fill="none" stroke="${col}" stroke-width="${n(w)}" stroke-linecap="round" opacity="${reduceMotion ? '.9' : '0'}">` +
+      a(`<animate attributeName="opacity" values="0;1;0;0" keyTimes="0;.12;.45;1" dur="0.8s" begin="${begin}" repeatCount="indefinite"/>`) + '</path>';
+    const x0 = R + 4;
+    return `<path data-p="line" fill="none" stroke="${c}" stroke-opacity=".3" stroke-width="${n(3)}" stroke-linecap="round"/>` +
+      `<g data-p="face">` +
+      slash(`M${n(x0 + 4)} ${n(-14)} Q${n(x0 + 14)} 0 ${n(x0 + 4)} ${n(14)}`, '#ffffff', 3.5, '0s') +
+      slash(`M${n(x0)} ${n(-13)} L${n(x0 + 13)} ${n(11)}`, c, 3.5, '-0.4s') +
+      slash(`M${n(x0 + 13)} ${n(-11)} L${n(x0)} ${n(13)}`, c, 3.5, '-0.2s') + '</g>';
+  }
+
+  function renderEffects() {
+    fxReady = true;
+    const ph = phase(), toks = tokensOf(ph), links = linksOf(ph);
+    const r = stage.getBoundingClientRect();
+    const k = r.width ? SVG_W / r.width : 1; // 화면 1px 이 SVG 몇 단위인지 (확대해도 이펙트 크기 일정)
+    const seen = new Set();
+    for (const id of Object.keys(links)) {
+      const l = links[id];
+      if (!l || typeof l !== 'object') continue;
+      const from = toks[l.from], to = toks[l.to];
+      if (!memberOf(from) || !to || l.from === l.to) continue;
+      if (l.kind === 'heal' ? !memberOf(to) : !isEnemy(to)) continue;
+      const A = tokenPos(l.from), B = tokenPos(l.to);
+      if (!A || !B) continue;
+      const type = fxType(l, from);
+      const color = type === 'heal' ? HEAL_COLOR : type === 'tank' ? TANK_COLOR : type === 'interrupt' ? KICK_COLOR : RP.classById(memberOf(from).cls).color;
+      const R = targetRadius(to), Rs = targetRadius(from);
+      const num = l.n || 1;
+      const key = [type, color, k.toFixed(2), R.toFixed(1), num].join('|');
+      let g = fxEls.get(id);
+      if (!g) {
+        g = document.createElementNS(SVGNS, 'g');
+        fxSvg.insertBefore(g, fxPreview);
+        fxEls.set(id, g);
+      }
+      if (g._key !== key) { g.innerHTML = fxMarkup(type, color, k, R, num); g._key = key; g._pos = ''; }
+      const ax = A.x * SVG_W, ay = A.y * svgH, bx = B.x * SVG_W, by = B.y * svgH;
+      const pos = [ax, ay, bx, by].map(v => v.toFixed(1)).join(',');
+      if (g._pos !== pos) {
+        g._pos = pos;
+        const d = `M${ax.toFixed(1)} ${ay.toFixed(1)} L${bx.toFixed(1)} ${by.toFixed(1)}`;
+        const ang = Math.atan2(ay - by, ax - bx) * 180 / Math.PI;
+        g.querySelectorAll('[data-p="line"]').forEach(e => e.setAttribute('d', d));
+        g.querySelectorAll('[data-p="motion"]').forEach(e => e.setAttribute('path', d));
+        g.querySelectorAll('[data-p="target"]').forEach(e => e.setAttribute('transform', `translate(${bx.toFixed(1)} ${by.toFixed(1)})`));
+        g.querySelectorAll('[data-p="mid"]').forEach(e => e.setAttribute('transform', `translate(${((ax + bx) / 2).toFixed(1)} ${((ay + by) / 2).toFixed(1)})`));
+        g.querySelectorAll('[data-p="face"]').forEach(e => e.setAttribute('transform', `translate(${bx.toFixed(1)} ${by.toFixed(1)}) rotate(${ang.toFixed(1)})`));
+        // 차단: 대상 오른쪽 위 모서리에 ⊘, 공대원 바로 앞 선 위에 순서 번호
+        const off = (R * 0.72 + 6) * k;
+        g.querySelectorAll('[data-p="corner"]').forEach(e => e.setAttribute('transform', `translate(${(bx + off).toFixed(1)} ${(by - off).toFixed(1)})`));
+        const len = Math.hypot(bx - ax, by - ay);
+        const t = len ? Math.min(0.45, (Rs + 16) * k / len) : 0;
+        g.querySelectorAll('[data-p="badge"]').forEach(e => e.setAttribute('transform', `translate(${(ax + (bx - ax) * t).toFixed(1)} ${(ay + (by - ay) * t).toFixed(1)})`));
+      }
+      seen.add(id);
+    }
+    for (const [id, g] of fxEls) if (!seen.has(id)) { g.remove(); fxEls.delete(id); }
+  }
+
+  // 길게 눌렀을 때 뜨는 메뉴
+  const ACT_ICON = {
+    attack: '<path d="M14 4h6v6L9.5 20.5l-6-6zM4 20l3-3M7.5 12.5l4 4"/>',
+    tank: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+    heal: '<path d="M12 5v14M5 12h14"/>',
+    interrupt: '<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>',
+    clear: '<path d="M6 6l12 12M18 6L6 18"/>'
+  };
+  function openActionMenu(tokenId) {
+    const el = tokenEls.get(tokenId);
+    const m = memberOf(tokensOf(phase())[tokenId]);
+    if (!el || !m || !canEdit()) return;
+    menuFor = tokenId;
+    const links = linksOf(phase());
+    const cur = links['l_' + tokenId], kick = links['i_' + tokenId];
+    const now = [cur && KIND_NAME[cur.kind], kick && `차단 ${kick.n || 1}번`].filter(Boolean).join(' · ');
+    const btn = (act, label, off) => `<button type="button" role="menuitem" data-act="${act}"${off ? ' disabled title="해제할 행동이 없습니다"' : ''}>` +
+      `<svg viewBox="0 0 24 24">${ACT_ICON[act]}</svg><span>${label}</span></button>`;
+    const menu = $('#actionMenu');
+    menu.innerHTML = `<div class="am-title"><b>${esc(m.name)}</b>${now ? ` · 지금: ${now}` : ''}</div>` +
+      '<div class="am-btns">' + btn('attack', '공격') + btn('tank', '탱') + btn('heal', '힐') + btn('interrupt', '차단') +
+      btn('clear', '해제', !cur && !kick) + '</div>';
+    menu.hidden = false;
+    const r = el.querySelector('.disc').getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let top = r.top - mh - 12;
+    if (top < 8) top = r.bottom + 12;
+    menu.style.left = clamp(r.left + r.width / 2 - mw / 2, 8, window.innerWidth - mw - 8) + 'px';
+    menu.style.top = clamp(top, 8, window.innerHeight - mh - 8) + 'px';
+    const first = menu.querySelector('button');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closeActionMenu() {
+    if (!menuFor && $('#actionMenu').hidden) return;
+    $('#actionMenu').hidden = true;
+    menuFor = null;
+  }
+  $('#actionMenu').addEventListener('click', e => {
+    const b = e.target.closest('[data-act]');
+    if (!b || !menuFor) return;
+    const from = menuFor;
+    closeActionMenu();
+    if (b.dataset.act === 'clear') {
+      const base = phasePath(), links = linksOf(phase());
+      const gone = ['l_' + from, 'i_' + from].filter(id => links[id]);
+      commit(gone.map(id => [base.concat('links', id), null]).concat(renumberOps(base, links, gone)));
+      toast('행동을 해제했습니다');
+      return;
+    }
+    startLinking(from, b.dataset.act);
+  });
+  document.addEventListener('pointerdown', e => {
+    if (menuFor && !e.target.closest('#actionMenu')) closeActionMenu();
+  }, true);
+
+  // 대상 고르기
+  function startLinking(from, kind) {
+    const toks = tokensOf(phase());
+    const m = memberOf(toks[from]);
+    if (!m) return;
+    view.linking = { from, kind };
+    const any = Object.keys(toks).some(linkTargetOk);
+    if (!any) {
+      view.linking = null;
+      return toast(kind === 'heal' ? '힐할 공대원이 지도에 없습니다' : '대상이 없습니다. 위쪽 메뉴에서 보스나 쫄을 먼저 놓으세요');
+    }
+    viewport.classList.add('linking');
+    viewport.classList.toggle('heal', kind === 'heal');
+    viewport.classList.toggle('interrupt', kind === 'interrupt');
+    $('#linkHint').innerHTML = `<b>${esc(m.name)}</b> ${KIND_NAME[kind]} 대상: ${kind === 'heal' ? '우리 공대원을' : '보스·쫄·징표를'} 클릭하세요 <span class="muted">· Esc 취소</span>`;
+    $('#linkHint').hidden = false;
+    fxPreview.setAttribute('stroke-width', '0');
+    scheduleRender();
+  }
+  function endLinking() {
+    if (!view.linking) return;
+    view.linking = null;
+    viewport.classList.remove('linking', 'heal', 'interrupt');
+    $('#linkHint').hidden = true;
+    fxPreview.setAttribute('d', '');
+    scheduleRender();
+  }
+  function pickLinkTarget(id) {
+    const L = view.linking;
+    if (!L) return;
+    if (id === L.from) { endLinking(); return; }
+    if (!linkTargetOk(id)) {
+      toast(L.kind === 'heal' ? '힐은 우리 공대원만 선택할 수 있습니다' : '공격·탱은 보스·쫄·징표만 선택할 수 있습니다');
+      return;
+    }
+    endLinking();
+    const base = phasePath(), links = linksOf(phase()), lid = linkId(L.kind, L.from);
+    const ops = [];
+    const link = { from: L.from, to: id, kind: L.kind };
+    if (L.kind === 'interrupt') {
+      // 같은 대상의 차단 순서: 이미 그 대상에 있으면 번호 유지, 아니면 맨 뒤 번호
+      const old = links[lid];
+      if (old && old.to === id) link.n = old.n || 1;
+      else {
+        if (old) ops.push(...renumberOps(base, links, [lid]));
+        link.n = Object.entries(links).filter(([k, l]) => k !== lid && l && l.kind === 'interrupt' && l.to === id).length + 1;
+      }
+    }
+    ops.push([base.concat('links', lid), link]);
+    commit(ops);
+    const type = fxType(L, tokensOf(phase())[L.from]);
+    toast(({ ranged: '원거리 공격', melee: '근거리 공격', tank: '탱', heal: '힐', interrupt: `차단 ${link.n}번` })[type] + '을 연결했습니다');
+  }
+  // 차단이 빠지면 같은 대상의 남은 차단 번호를 1부터 다시 매김
+  function renumberOps(base, links, removed) {
+    const ops = [];
+    const targets = new Set(removed.map(id => links[id]).filter(l => l && l.kind === 'interrupt').map(l => l.to));
+    targets.forEach(to => {
+      Object.entries(links)
+        .filter(([lid, l]) => l && l.kind === 'interrupt' && l.to === to && !removed.includes(lid))
+        .sort((a, b) => (a[1].n || 0) - (b[1].n || 0))
+        .forEach(([lid, l], i) => { if ((l.n || 0) !== i + 1) ops.push([base.concat('links', lid, 'n'), i + 1]); });
+    });
+    return ops;
+  }
+  // 대상 고르는 동안 공대원에서 커서까지 점선
+  viewport.addEventListener('pointermove', e => {
+    if (!view.linking) return;
+    const A = tokenPos(view.linking.from), pt = stagePoint(e.clientX, e.clientY);
+    if (!A || !pt) return;
+    const r = stage.getBoundingClientRect();
+    const k = r.width ? SVG_W / r.width : 1;
+    fxPreview.setAttribute('d', `M${(A.x * SVG_W).toFixed(1)} ${(A.y * svgH).toFixed(1)} L${(pt.x * SVG_W).toFixed(1)} ${(pt.y * svgH).toFixed(1)}`);
+    fxPreview.setAttribute('stroke-width', (2.5 * k).toFixed(2));
+    fxPreview.setAttribute('stroke-dasharray', `${(6 * k).toFixed(1)} ${(6 * k).toFixed(1)}`);
+    fxPreview.setAttribute('stroke', view.linking.kind === 'heal' ? HEAL_COLOR : view.linking.kind === 'interrupt' ? KICK_COLOR : '#ff6b5e');
+  });
+
   // ---------- 팔레트 / 명단에서 지도로 끌어오기 ----------
   function beginDropDrag(e, payload, ghostHtml) {
     if (!canEdit() || e.button !== 0 || !phase()) return;
@@ -949,6 +1269,7 @@
   }, { passive: false });
 
   viewport.addEventListener('pointerdown', e => {
+    if (view.linking) { endLinking(); toast('대상 선택을 취소했습니다'); return; }
     if (!boss() || e.target.closest('.empty, .stage-note')) return;
     if ((e.altKey || view.pingMode) && canEdit()) {
       const pt = stagePoint(e.clientX, e.clientY);
@@ -1039,7 +1360,7 @@
     const cur = phase() || {};
     set(['bosses', view.bossId, 'phases', id], {
       name: `${ps.length + 1}단계`, order: nextOrder(ps),
-      tokens: clone(cur.tokens) || null, draw: clone(cur.draw) || null
+      tokens: clone(cur.tokens) || null, draw: clone(cur.draw) || null, links: clone(cur.links) || null
     });
     goTo(view.bossId, id);
     toast('현재 배치를 복사해서 새 단계를 만들었습니다');
@@ -1121,7 +1442,7 @@
       if (!ok || !state.roster || !state.roster[id]) return;
       const ops = [[['roster', id], null]];
       bosses().forEach(b => phases(b).forEach(p => {
-        if (tokensOf(p)['m_' + id]) ops.push([['bosses', b.id, 'phases', p.id, 'tokens', 'm_' + id], null]);
+        if (tokensOf(p)['m_' + id]) ops.push(...removeTokenOps(['bosses', b.id, 'phases', p.id], 'm_' + id));
       }));
       commit(ops);
     }
@@ -1165,12 +1486,18 @@
     commit(ops);
     toast(`${members.length}명을 배치했습니다. 끌어서 조정하세요`);
   };
+  $('#clearLinksBtn').onclick = async () => {
+    const p = phase();
+    if (!p || !p.links || !Object.keys(p.links).length) return toast('이 단계에 연결된 행동이 없습니다');
+    const path = [...phasePath(), 'links'];
+    if (await ask({ title: '이 단계의 행동 연결을 모두 해제할까요?', message: '공격·탱·힐·차단 선이 모두 지워집니다. 배치는 그대로 둡니다.', ok: '해제', danger: true })) set(path, null);
+  };
   $('#clearPhaseBtn').onclick = async () => {
     const base = [...phasePath(), 'tokens'];
     const ids = Object.keys(tokensOf(phase())).filter(k => k.startsWith('m_'));
     if (!ids.length) return;
     if (!await ask({ title: '현재 단계의 공대원 배치를 모두 해제할까요?', ok: '해제', danger: true })) return;
-    commit(ids.map(id => [base.concat(id), null]));
+    commit(ids.map(id => [base.concat(id), null]).concat([[base.slice(0, -1).concat('links'), null]]));
   };
 
   // ---------- 오른쪽 패널 ----------
@@ -1472,7 +1799,10 @@
     else if (k === 'ArrowDown') { e.preventDefault(); stepBoss(1); }
     else if (k === 'ArrowUp') { e.preventDefault(); stepBoss(-1); }
     else if (k === 'f' || k === 'F') toggleStageOnly();
-    else if (k === 'Escape') { toggleStageOnly(false); togglePing(false); setTool('select'); }
+    else if (k === 'Escape') {
+      if (view.linking || menuFor) { endLinking(); closeActionMenu(); return; }
+      toggleStageOnly(false); togglePing(false); setTool('select');
+    }
   });
   document.addEventListener('keyup', e => {
     if (e.code === 'Space') { spaceHeld = false; viewport.classList.remove('space-pan'); }
