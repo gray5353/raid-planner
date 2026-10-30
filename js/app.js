@@ -429,11 +429,14 @@
   function layoutStage() {
     const vw = viewport.clientWidth, vh = viewport.clientHeight;
     const pad = vw < 600 ? 8 : 24;
-    const s = Math.max(0.01, Math.min((vw - pad * 2) / natW, (vh - pad * 2) / natH));
+    // 작전 메모가 펼쳐져 있으면 넓은 화면에서는 오른쪽을 비워 지도를 가리지 않음
+    const memoEl = document.getElementById('memo');
+    const side = memoEl && !memoEl.hidden && vw >= 760 ? memoEl.offsetWidth + 12 : 0;
+    const s = Math.max(0.01, Math.min((vw - side - pad * 2) / natW, (vh - pad * 2) / natH));
     baseW = natW * s; baseH = natH * s;
     stage.style.width = baseW + 'px';
     stage.style.height = baseH + 'px';
-    baseX = (vw - baseW) / 2;
+    baseX = (vw - side - baseW) / 2;
     baseY = (vh - baseH) / 2;
     stage.style.setProperty('--token', clamp(Math.min(baseW, baseH) / 22, 18, 32).toFixed(1) + 'px');
     const h = Math.round(SVG_W * natH / natW);
@@ -1493,22 +1496,6 @@
     });
     return out;
   }
-  $('#bulkBtn').onclick = () => { $('#bulkText').value = ''; $('#bulkDialog').showModal(); };
-  $('#bulkDialog').addEventListener('close', () => {
-    if ($('#bulkDialog').returnValue !== 'ok') return;
-    const members = list(state.roster);
-    const existing = new Set(members.map(m => m.name));
-    const rows = parseBulk($('#bulkText').value).filter(r => !existing.has(r.name) && existing.add(r.name));
-    if (!rows.length) return toast(tr('추가할 새 이름이 없습니다'));
-    // 빈칸에 차례대로
-    const { slots } = layoutSlots(members, raidSize());
-    const free = slots.map((m, k) => (m ? -1 : k)).filter(k => k >= 0);
-    const fit = rows.slice(0, free.length), left = rows.length - fit.length;
-    const t = Date.now();
-    if (fit.length) commit(fit.map((r, i) => [['roster', 'm' + RP.uid(6)], Object.assign(r, { slot: free[i], order: t + i })]));
-    toast(left ? tr('자리가 부족해 {n}명은 추가하지 못했습니다', { n: left }) : tr('{n}명을 추가했습니다', { n: fit.length }));
-  });
-
   // 공대원과 모든 보스·단계의 배치를 함께 지움
   function removeMemberOps(id) {
     const ops = [[['roster', id], null]];
@@ -1646,58 +1633,6 @@
     if (!$('#slotEditor').hidden && !e.target.closest('#slotEditor')) closeSlotEditor();
   }, true);
 
-  // 역할별 자동 배치: 보스(가운데) 기준으로 탱은 위, 근딜은 바로 아래, 힐·원딜은 바깥 호
-  $('#autoPlaceBtn').onclick = () => {
-    const ph = phase();
-    if (!ph) return;
-    const toks = tokensOf(ph);
-    const members = list(state.roster).filter(m => !toks['m_' + m.id]);
-    if (!members.length) return toast(tr('배치할 인원이 없습니다'));
-    const base = [...phasePath(), 'tokens'];
-    const by = { tank: [], melee: [], healer: [], ranged: [] };
-    members.forEach(m => (by[RP.roleById(m.role).id]).push(m));
-    const ops = [];
-    const arc = (arr, r0, a0, a1) => {
-      let i = 0, r = r0;
-      const span = (a1 - a0) * Math.PI / 180;
-      while (i < arr.length) {
-        const cap = Math.max(2, Math.floor(r * span / 0.055) + 1);
-        const row = arr.slice(i, i + cap);
-        row.forEach((m, k) => {
-          const a = (a0 * Math.PI / 180) + span * (row.length === 1 ? 0.5 : k / (row.length - 1));
-          ops.push([[...base, 'm_' + m.id], {
-            type: 'member', ref: m.id,
-            x: round(clamp(0.5 + r * Math.cos(a), 0.03, 0.97)), y: round(clamp(0.5 + r * Math.sin(a), 0.03, 0.97))
-          }]);
-        });
-        i += cap;
-        r += 0.06;
-      }
-    };
-    arc(by.tank, 0.08, 225, 315);
-    arc(by.melee, 0.1, 25, 155);
-    arc(by.healer, 0.24, 30, 150);
-    arc(by.ranged, 0.34, 15, 165);
-    if (!Object.values(toks).some(t => t && t.type === 'boss')) {
-      ops.push([[...base, 'x_' + RP.uid(6)], { type: 'boss', label: tr('보스'), x: 0.5, y: 0.5 }]);
-    }
-    commit(ops);
-    toast(tr('{n}명을 배치했습니다. 끌어서 조정하세요', { n: members.length }));
-  };
-  $('#clearLinksBtn').onclick = async () => {
-    const p = phase();
-    if (!p || !p.links || !Object.keys(p.links).length) return toast(tr('이 단계에 연결된 행동이 없습니다'));
-    const path = [...phasePath(), 'links'];
-    if (await ask({ title: tr('이 단계의 행동 연결을 모두 해제할까요?'), message: tr('공격·탱·힐·차단 선이 모두 지워집니다. 배치는 그대로 둡니다.'), ok: tr('해제'), danger: true })) set(path, null);
-  };
-  $('#clearPhaseBtn').onclick = async () => {
-    const base = [...phasePath(), 'tokens'];
-    const ids = Object.keys(tokensOf(phase())).filter(k => k.startsWith('m_'));
-    if (!ids.length) return;
-    if (!await ask({ title: tr('현재 단계의 공대원 배치를 모두 해제할까요?'), ok: tr('해제'), danger: true })) return;
-    commit(ids.map(id => [base.concat(id), null]).concat([[base.slice(0, -1).concat('links'), null]]));
-  };
-
   // ---------- 오른쪽 패널 ----------
   function renderSide() {
     const b = boss(), p = phase();
@@ -1746,26 +1681,34 @@
   // 서식 태그가 있으면 서식 메모, 아니면 예전 글자 메모(줄바꿈 유지)
   const noteHtml = note => (!note ? '' : NOTE_TAG.test(note) ? cleanNote(note) : esc(note).replace(/\n/g, '<br>'));
 
+  let memoOpen = local.get('rp-memo-open') === '1';
   function setMemoOpen(v) {
-    memo.classList.toggle('open', v);
-    $('#memoBody').hidden = !v;
-    $('#memoToggle').setAttribute('aria-expanded', String(v));
+    memoOpen = v;
     local.set('rp-memo-open', v ? '1' : '0');
+    renderMemo();
+    layoutStage();
+    if (v && canEdit()) memoEdit.focus();
   }
-  setMemoOpen(local.get('rp-memo-open') === '1');
-  $('#memoToggle').onclick = () => setMemoOpen($('#memoBody').hidden);
+  $('#memoToggle').onclick = () => setMemoOpen(!memoOpen);
+  $('#memoClose').onclick = () => setMemoOpen(false);
   function buildMemoColors() {
     $('#memoColors').innerHTML = MEMO_COLORS.map(c =>
-      `<button type="button" class="mc" data-color="${c}" style="background:${c}" title="${tr('글자 색')}" aria-label="${tr('글자 색')}"></button>`).join('');
+      `<button type="button" class="mc" data-color="${c}" aria-pressed="false" style="background:${c}" title="${tr('글자 색')}" aria-label="${tr('글자 색')}"></button>`).join('');
   }
   buildMemoColors();
 
   function renderMemo() {
     const b = boss(), p = phase();
-    memo.hidden = !b;
+    const btn = $('#memoToggle');
+    const wasHidden = memo.hidden;
+    btn.hidden = !b;
+    memo.hidden = !b || !memoOpen;
+    btn.setAttribute('aria-expanded', String(!memo.hidden));
+    btn.classList.toggle('open', !memo.hidden);
+    if (wasHidden !== memo.hidden) requestAnimationFrame(layoutStage);
     $('#memoWhere').textContent = b && p ? `${b.name} · ${p.name}` : '';
     const html = noteHtml(p && p.note);
-    memo.classList.toggle('has-note', !!html);
+    btn.classList.toggle('has-note', !!html);
     memoEdit.contentEditable = String(canEdit() && !!p);
     const key = view.bossId + '/' + view.phaseId;
     if (memoEdit.dataset.key !== key || (document.activeElement !== memoEdit && memoEdit._html !== html)) {
@@ -1801,7 +1744,29 @@
     if (b.dataset.color) document.execCommand('foreColor', false, b.dataset.color);
     else document.execCommand(b.dataset.cmd, false, null);
     saveMemo();
+    updateMemoTools();
   });
+  // 커서가 있는 글자의 서식에 맞춰 B·I·U·목록·글자 색 버튼에 눌림 표시
+  const toHex = c => {
+    const m = String(c || '').match(/\d+(\.\d+)?/g);
+    if (/^#[0-9a-f]{6}$/i.test(c)) return c.toLowerCase();
+    return m && m.length >= 3 ? '#' + m.slice(0, 3).map(v => Math.round(Number(v)).toString(16).padStart(2, '0')).join('') : '';
+  };
+  function updateMemoTools() {
+    if (memo.hidden || !canEdit()) return;
+    const sel = document.getSelection();
+    const inside = !!(sel && sel.rangeCount && memoEdit.contains(sel.anchorNode));
+    ['bold', 'italic', 'underline', 'insertUnorderedList'].forEach(cmd => {
+      let on = false;
+      try { on = inside && document.queryCommandState(cmd); } catch (e) { on = false; }
+      const b = document.querySelector(`#memoTools [data-cmd="${cmd}"]`);
+      if (b) b.setAttribute('aria-pressed', String(!!on));
+    });
+    let color = '';
+    try { color = inside ? toHex(document.queryCommandValue('foreColor')) : ''; } catch (e) { color = ''; }
+    document.querySelectorAll('#memoColors .mc').forEach(m => m.setAttribute('aria-pressed', String(!!color && m.dataset.color === color)));
+  }
+  document.addEventListener('selectionchange', updateMemoTools);
 
   function buildTemplates() {
     $('#templateBtns').innerHTML = Object.keys(RP.MAP_TEMPLATES).map(k =>
@@ -2147,5 +2112,5 @@
 
   document.querySelectorAll('#langToggle [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === RP.lang())));
   render();
-  window.RP.debug = { get state() { return state; }, view, sync };
+  window.RP.debug = { get state() { return state; }, view, sync, commit };
 })();

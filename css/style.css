@@ -481,47 +481,48 @@ body:not(.view-mode) .slot.vacant:hover { color: var(--gold); background: #24201
 
 .templates { display: flex; gap: 6px; flex-wrap: wrap; }
 
-/* 작전 메모 (지도 왼쪽 위) */
+/* 작전 메모: 단계 줄 오른쪽 버튼 → 지도 오른쪽에 붙는 창 (넓은 화면에서는 지도가 비켜 섬) */
+.memo-btn { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.memo-btn .chev { width: 14px; height: 14px; fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.memo-btn.open { border-color: var(--gold); color: var(--gold); }
+.memo-btn.open .chev { transform: rotate(180deg); }
+.memo-btn.has-note:not(.open)::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); }
 .memo {
-  position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: 12px; z-index: 6;
-  width: min(390px, calc(100% - 24px)); display: grid;
+  position: absolute; top: 12px; right: max(12px, env(safe-area-inset-right, 0px)); bottom: 12px; z-index: 6;
+  width: min(392px, calc(100% - 24px)); display: flex; flex-direction: column;
+  background: rgba(22,25,32,.97); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.5); overflow: hidden;
 }
-.memo-toggle {
-  justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%;
-  padding: 7px 12px; border-radius: 999px; cursor: pointer;
-  background: rgba(22,25,32,.94); border: 1px solid var(--line); color: var(--text); font-weight: 700; font-size: 14px;
-  box-shadow: 0 6px 18px rgba(0,0,0,.4);
+.memo-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; border-bottom: 1px solid var(--line); min-width: 0; }
+.memo-title { font-weight: 700; color: var(--gold); white-space: nowrap; }
+.memo-where { flex: 1; color: var(--muted); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memo-close {
+  width: 28px; height: 28px; display: grid; place-items: center; flex: none;
+  border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; color: var(--muted);
 }
-.memo-toggle:hover { border-color: #46505f; }
-.memo-toggle:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
-.memo-toggle .chev { width: 16px; height: 16px; flex: none; fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
-.memo.open .memo-toggle .chev { transform: rotate(180deg); }
-.memo-where { color: var(--muted); font-weight: 400; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.memo.has-note:not(.open) .memo-toggle::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); flex: none; }
-.memo.open .memo-toggle { justify-self: stretch; border-radius: 10px 10px 0 0; border-bottom-color: transparent; box-shadow: none; }
-.memo-body {
-  background: rgba(22,25,32,.96); border: 1px solid var(--line); border-top: 0; border-radius: 0 0 10px 10px;
-  box-shadow: 0 10px 26px rgba(0,0,0,.5); display: grid;
-}
-.memo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 6px 8px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.memo-close:hover { border-color: var(--line); color: var(--text); }
+.memo-close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.memo-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .memo-tools button[data-cmd] {
-  min-width: 28px; height: 26px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px;
+  min-width: 30px; height: 28px; padding: 0 6px; border: 1px solid transparent; border-radius: 6px;
   background: none; color: var(--text); cursor: pointer; font-size: 14px;
 }
 .memo-tools button[data-cmd]:hover { background: var(--panel-2); border-color: var(--line); }
-.memo-colors { display: inline-flex; gap: 4px; padding: 0 2px; }
-.memo-tools .mc { width: 16px; height: 16px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); cursor: pointer; }
+.memo-tools button[data-cmd][aria-pressed="true"] { background: #3a2f17; border-color: var(--gold); color: var(--gold); }
+.memo-colors { display: inline-flex; gap: 5px; padding: 0 3px; }
+.memo-tools .mc { width: 17px; height: 17px; padding: 0; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); cursor: pointer; }
 .memo-tools .mc:hover { transform: scale(1.15); }
+.memo-tools .mc[aria-pressed="true"] { outline: 2px solid var(--gold); outline-offset: 2px; }
 .memo-sep { width: 1px; height: 18px; background: var(--line); margin: 0 3px; }
 .memo-edit {
-  padding: 10px 12px; min-height: 130px; max-height: min(52vh, 440px); overflow: auto;
+  flex: 1; min-height: 120px; padding: 12px 14px; overflow: auto;
   font-size: 15px; line-height: 1.6; outline: none; word-break: keep-all; overflow-wrap: break-word;
 }
-.memo-edit:focus { box-shadow: inset 0 0 0 1px var(--gold); border-radius: 0 0 10px 10px; }
+.memo-edit:focus { box-shadow: inset 0 0 0 1px rgba(226,179,86,.5); }
 .memo-edit:empty::before { content: attr(data-placeholder); color: var(--muted); }
 .memo-edit ul, .memo-edit ol { margin: 4px 0; padding-left: 22px; }
-.view-mode .memo-edit { min-height: 48px; }
 .view-mode .memo-edit:empty::before { content: "—"; }
+@media (max-width: 720px) { .memo { bottom: auto; max-height: calc(100% - 24px); } }
 .howto { margin-top: 8px; font-size: 12px; color: var(--muted); }
 .howto summary { cursor: pointer; color: var(--text); }
 .howto ol { padding-left: 18px; margin: 6px 0 0; }

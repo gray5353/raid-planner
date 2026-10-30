@@ -59,12 +59,6 @@
       <div class="size-pick" id="sizePick" role="group" aria-label="공격대 인원"></div>
       <div id="roleCounts" class="role-counts"></div>
     </div>
-    <div class="row-btns edit-only">
-      <button id="bulkBtn" class="btn small">일괄 입력</button>
-      <button id="autoPlaceBtn" class="btn small" title="아직 배치하지 않은 인원을 역할별로 놓습니다">역할별 자동 배치</button>
-      <button id="clearPhaseBtn" class="btn small danger" title="현재 단계의 공대원 배치를 모두 지웁니다">배치 해제</button>
-      <button id="clearLinksBtn" class="btn small danger" title="현재 단계의 공격·탱·힐·차단 연결을 모두 지웁니다">행동 해제</button>
-    </div>
     <p class="hint edit-only">빈칸을 눌러 공대원을 등록하세요. 이름이나 파티 제목을 지도로 끌어다 놓으면 배치됩니다.</p>
     <div id="rosterList" class="roster-list"></div>
   </aside>
@@ -81,6 +75,9 @@
           <button class="btn small" id="zoomReset" title="화면에 맞춤">100%</button>
           <button class="btn small" id="zoomIn" title="확대">+</button>
         </div>
+        <button type="button" class="btn small memo-btn" id="memoToggle" aria-expanded="false" aria-controls="memo" hidden>
+          <span>작전 메모</span><svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
       </div>
     </div>
     <div class="drawbar edit-only" id="drawbar" aria-label="그리기 도구">
@@ -107,23 +104,21 @@
       <div class="empty" id="emptyState" hidden></div>
       <div class="drop-hint" id="dropHint" hidden>이미지를 놓으면 이 보스의 지형으로 설정됩니다</div>
       <div class="memo" id="memo" hidden>
-        <button type="button" class="memo-toggle" id="memoToggle" aria-expanded="false" aria-controls="memoBody">
-          <span>작전 메모</span><span class="memo-where" id="memoWhere"></span>
-          <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        </button>
-        <div class="memo-body" id="memoBody" hidden>
+        <div class="memo-head">
+          <span class="memo-title">작전 메모</span><span class="memo-where" id="memoWhere"></span>
+          <button type="button" class="memo-close" id="memoClose" title="접기" aria-label="접기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+        </div>
           <div class="memo-tools edit-only" id="memoTools">
-            <button type="button" data-cmd="bold" title="굵게 (Ctrl+B)"><b>B</b></button>
-            <button type="button" data-cmd="italic" title="기울임 (Ctrl+I)"><i>I</i></button>
-            <button type="button" data-cmd="underline" title="밑줄 (Ctrl+U)"><u>U</u></button>
+            <button type="button" data-cmd="bold" aria-pressed="false" title="굵게 (Ctrl+B)"><b>B</b></button>
+            <button type="button" data-cmd="italic" aria-pressed="false" title="기울임 (Ctrl+I)"><i>I</i></button>
+            <button type="button" data-cmd="underline" aria-pressed="false" title="밑줄 (Ctrl+U)"><u>U</u></button>
             <span class="memo-sep"></span>
             <span class="memo-colors" id="memoColors"></span>
             <span class="memo-sep"></span>
-            <button type="button" data-cmd="insertUnorderedList" title="목록">• ―</button>
+            <button type="button" data-cmd="insertUnorderedList" aria-pressed="false" title="목록">• ―</button>
             <button type="button" data-cmd="removeFormat" title="서식 지우기">T<sub>×</sub></button>
           </div>
           <div class="memo-edit" id="memoEdit" role="textbox" aria-multiline="true" aria-label="작전 메모" data-placeholder="이 단계에서 할 일, 담당, 주의할 패턴…"></div>
-        </div>
       </div>
       <div class="link-hint" id="linkHint" hidden></div>
     </div>
@@ -202,19 +197,6 @@
   </aside>
 </main>
 
-<dialog id="bulkDialog" class="dialog">
-  <form method="dialog">
-    <h3>공대원 일괄 입력</h3>
-    <p class="hint" data-i18n-html>한 줄에 한 명씩: <code>이름 직업 역할</code><br>
-      예) <code>홍길동 전사 탱</code> · <code>달빛 사제 힐</code> · <code>바람 사냥꾼</code><br>
-      직업·역할은 생략 가능 (역할을 생략하면 직업 기본값). 쉼표, 탭도 구분자로 인식합니다.</p>
-    <textarea id="bulkText" rows="12" placeholder="홍길동 전사 탱&#10;달빛 사제 힐&#10;바람 사냥꾼 원딜"></textarea>
-    <div class="row-btns end">
-      <button value="cancel" class="btn">취소</button>
-      <button id="bulkOk" value="ok" class="btn gold">추가</button>
-    </div>
-  </form>
-</dialog>
 
 
 <div class="peer-panel" id="peerPanel" hidden></div>
