@@ -282,6 +282,9 @@ code { background: var(--panel-2); padding: 0 4px; border-radius: 4px; }
   pointer-events: none;
 }
 .token.hl .disc { outline: 3px solid var(--gold); outline-offset: 2px; }
+.token.flash .disc { animation: flash .4s ease-in-out 3; }
+@keyframes flash { 50% { transform: scale(1.5); filter: drop-shadow(0 0 8px var(--gold)); } }
+@media (prefers-reduced-motion: reduce) { .token.flash .disc { animation: none; outline: 3px solid var(--gold); } }
 .token.marker .disc { background: none; border: 0; box-shadow: none; filter: drop-shadow(0 2px 3px rgba(0,0,0,.8)); }
 .token.marker svg { width: calc(var(--token) * 1.05); height: calc(var(--token) * 1.05); }
 .token.boss .disc {

@@ -263,11 +263,11 @@
     if (!changed('palette', sig)) return;
     $('#palette').innerHTML =
       RP.MARKERS.map(m =>
-        `<div class="pal-item${toks['k_' + m.id] ? ' used' : ''}" data-kind="marker" data-id="${m.id}" title="${m.name} 징표">${RP.markerSVG(m.id)}</div>`
+        `<div class="pal-item${toks['k_' + m.id] ? ' used' : ''}" data-kind="marker" data-id="${m.id}" title="${m.name} 징표 · 클릭하거나 지도로 끌어다 놓기">${RP.markerSVG(m.id)}</div>`
       ).join('') +
       '<span class="pal-sep"></span>' +
-      '<div class="pal-item boss" data-kind="boss" title="보스">보스</div>' +
-      '<div class="pal-item add" data-kind="add" title="쫄 (추가 몹)">쫄</div>';
+      '<div class="pal-item boss" data-kind="boss" title="보스 · 클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에">보스</div>' +
+      '<div class="pal-item add" data-kind="add" title="쫄 · 클릭할 때마다 오른쪽에 차례대로 추가, 끌면 원하는 곳에">쫄</div>';
   }
 
   // ---------- 지도 ----------
@@ -384,7 +384,7 @@
     if (t.type === 'boss' || t.type === 'add') {
       const def = t.type === 'boss' ? '보스' : '쫄';
       const label = t.label && t.label !== def ? `<div class="label">${esc(t.label)}</div>` : '';
-      return { cls: t.type, title: t.label || def, html: `<div class="disc">${def}</div>${label}` };
+      return { cls: t.type, title: (t.label || def) + ' · 클릭해서 이름 바꾸기', html: `<div class="disc">${def}</div>${label}` };
     }
     if (t.type === 'text') {
       const col = validColor(t.color) ? t.color : '#ffffff';
@@ -500,22 +500,24 @@
     if (d.moved && e.type !== 'pointercancel') {
       if (d.out) { set(d.path, null); toast('배치를 해제했습니다'); }
       else set(d.path, d.value);
+    } else if (!d.moved && e.type !== 'pointercancel') {
+      renameToken(d.path);
     }
     scheduleRender();
   }
 
-  tokenLayer.addEventListener('dblclick', async e => {
-    const el = e.target.closest('.token');
-    if (!el || !canEdit() || view.tool !== 'select') return;
-    const path = [...phasePath(), 'tokens', el.dataset.id];
-    const t = tokensOf(phase())[el.dataset.id];
+  // 보스·쫄·글자를 클릭하면 이름 바꾸기
+  async function renameToken(path) {
+    const t = getIn(state, path);
     if (!t || !['boss', 'add', 'text'].includes(t.type)) return;
-    const def = t.type === 'boss' ? '보스' : t.type === 'add' ? '쫄' : '';
-    const label = await ask({ title: '표시할 이름', value: t.label || def });
-    if (label === null) return;
-    if (!label.trim() && t.type === 'text') set(path, null);
-    else set(path.concat('label'), label.trim().slice(0, 40));
-  });
+    const title = t.type === 'boss' ? '보스 이름' : t.type === 'add' ? '쫄 이름' : '지도에 쓸 글자';
+    const label = await ask({ title, value: t.label || '' });
+    if (label === null || !getIn(state, path)) return;
+    const v = label.trim().slice(0, 40);
+    if (!v && t.type === 'text') set(path, null);
+    else if (!v) set(path.concat('label'), (t.type === 'boss' ? '보스 ' : '쫄 ') + (t.n || 1));
+    else set(path.concat('label'), v);
+  }
   tokenLayer.addEventListener('contextmenu', e => {
     const el = e.target.closest('.token');
     if (!el || !canEdit()) return;
@@ -797,7 +799,7 @@
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       if (ev.type === 'pointercancel') { if (ghost) ghost.remove(); return; }
-      if (!ghost) { if (payload.clickPlace) dropPayload(payload, viewCenterPoint()); return; }
+      if (!ghost) { if (payload.clickPlace) dropPayload(payload, viewCenterPoint(), true); return; }
       ghost.remove();
       const pt = stagePoint(ev.clientX, ev.clientY);
       if (pt && inViewport(ev.clientX, ev.clientY) && pt.x >= 0 && pt.x <= 1 && pt.y >= 0 && pt.y <= 1) dropPayload(payload, pt);
@@ -807,19 +809,64 @@
     window.addEventListener('pointercancel', up);
   }
 
-  function dropPayload(p, pt) {
+  // auto: 메뉴를 클릭만 했을 때 (끌어다 놓은 게 아닐 때)
+  function dropPayload(p, pt, auto) {
     if (!pt || !phase()) return;
     const base = [...phasePath(), 'tokens'];
-    const x = round(clamp(pt.x, 0, 1)), y = round(clamp(pt.y, 0, 1));
+    const toks = tokensOf(phase());
+    let x = round(clamp(pt.x, 0, 1)), y = round(clamp(pt.y, 0, 1));
     if (p.kind === 'member') set([...base, 'm_' + p.id], { type: 'member', ref: p.id, x, y });
-    else if (p.kind === 'marker') set([...base, 'k_' + p.id], { type: 'marker', ref: Number(p.id), x, y });
-    else if (p.kind === 'boss' || p.kind === 'add') set([...base, 'x_' + RP.uid(6)], { type: p.kind, label: p.kind === 'boss' ? '보스' : '쫄', x, y });
+    else if (p.kind === 'marker') {
+      if (auto && toks['k_' + p.id]) { flashToken('k_' + p.id); toast('이미 놓은 징표입니다. 지도에서 끌어서 옮기세요'); return; }
+      set([...base, 'k_' + p.id], { type: 'marker', ref: Number(p.id), x, y });
+    } else if (p.kind === 'boss' || p.kind === 'add') {
+      // 같은 종류를 차례대로 번호 매기고, 클릭으로 추가하면 앞의 것 오른쪽에 놓음
+      const same = Object.values(toks).filter(t => t && t.type === p.kind && typeof t.x === 'number');
+      const n = same.reduce((m, t) => Math.max(m, t.n || 0), 0) + 1;
+      if (auto) {
+        const r = stage.getBoundingClientRect();
+        const px = parseFloat(getComputedStyle(stage).getPropertyValue('--token')) || 28;
+        const size = px * (p.kind === 'boss' ? 1.6 : 0.8);
+        const stepX = (Math.max(size, 56) + 14) / r.width;
+        const stepY = (size + 34) / r.height;
+        let rowX = x;
+        if (same.length) {
+          const last = same.reduce((a, t) => ((t.n || 0) >= (a.n || 0) ? t : a));
+          rowX = same.reduce((a, t) => ((t.n || 0) < (a.n || 0) ? t : a)).x;
+          x = last.x + stepX;
+          y = last.y;
+        }
+        // 다른 토큰과 겹치면 비켜 놓음: 첫 번째는 아래 줄로, 그다음부터는 오른쪽으로 (끝에 닿으면 다음 줄)
+        const others = Object.values(toks).filter(t => t && typeof t.x === 'number');
+        const busy = (cx, cy) => others.some(t => Math.hypot((t.x - cx) * r.width, (t.y - cy) * r.height) < Math.max(size, 40));
+        for (let i = 0; i < 60; i++) {
+          if (x > 0.97) { x = rowX; y += stepY; }
+          if (y > 0.97) y = 0.06;
+          if (!busy(x, y)) break;
+          if (same.length) x += stepX; else y += stepY;
+        }
+        x = round(clamp(x, 0.03, 0.97));
+        y = round(clamp(y, 0.03, 0.97));
+      }
+      const label = (p.kind === 'boss' ? '보스 ' : '쫄 ') + n;
+      set([...base, 'x_' + RP.uid(6)], { type: p.kind, label, n, x, y });
+    }
+  }
+
+  function flashToken(id) {
+    const el = tokenEls.get(id);
+    if (!el) return;
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1300);
   }
 
   $('#palette').addEventListener('pointerdown', e => {
     const it = e.target.closest('.pal-item');
     if (!it) return;
     e.preventDefault();
+    if (view.tool !== 'select') setTool('select');
     const kind = it.dataset.kind;
     const ghost = kind === 'marker' ? RP.markerSVG(it.dataset.id) : esc(it.textContent);
     beginDropDrag(e, { kind, id: it.dataset.id, clickPlace: true }, ghost);
