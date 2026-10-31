@@ -69,9 +69,10 @@
     };
   }
 
-  // ---------- 웹소켓: server.js ----------
-  function wsAdapter(room, h, me, url, onNeverOpened) {
-    let ws = null, open = false, everOpened = false, retry = 0;
+  // ---------- 웹소켓: server.js / Cloudflare Worker ----------
+  // view: 보기 코드로 들어올 때 (서버가 읽기 전용으로 받음). 편집자는 서버가 알려 준 보기 코드를 viewCode 로 가짐
+  function wsAdapter(room, h, me, url, onNeverOpened, view) {
+    let ws = null, open = false, everOpened = false, retry = 0, stopped = false, viewCode = null;
     const pending = new Map();
     const send = m => {
       if (open && ws && ws.readyState === 1) { ws.send(JSON.stringify(m)); return true; }
@@ -79,16 +80,21 @@
     };
     function connect() {
       h.onStatus('connecting', '서버 연결 중…');
-      try { ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + 'room=' + encodeURIComponent(room)); }
+      const q = view ? 'view=' + encodeURIComponent(view) : 'room=' + encodeURIComponent(room);
+      try { ws = new WebSocket(url + (url.includes('?') ? '&' : '?') + q); }
       catch (e) { if (onNeverOpened) onNeverOpened(); return; }
       ws.onopen = () => {
         open = true; everOpened = true; retry = 0;
-        send({ t: 'join', room, me });
+        send(view ? { t: 'join', view, me } : { t: 'join', room, me });
       };
       ws.onmessage = e => {
         let m;
         try { m = JSON.parse(e.data); } catch (err) { return; }
-        if (m.t === 'snapshot') {
+        if (m.t === 'error') {
+          stopped = true;
+          h.onStatus('offline', m.code === 'noview' ? '없는 보기 링크입니다. 공대장에게 새 링크를 받아 주세요' : '연결할 수 없습니다');
+        } else if (m.t === 'snapshot') {
+          if (m.view) viewCode = m.view;
           const s = m.state || {};
           // 끊겨 있던 동안의 내 변경을 서버 상태 위에 다시 얹고 전송
           const ops = [...pending.values()];
@@ -104,6 +110,7 @@
       };
       ws.onclose = () => {
         open = false;
+        if (stopped) return;
         if (!everOpened && onNeverOpened) { onNeverOpened(); return; }
         h.onStatus('offline', '연결 끊김 · 다시 연결하는 중…');
         setTimeout(connect, Math.min(10000, 500 * Math.pow(2, retry++)));
@@ -120,6 +127,7 @@
     };
     return {
       mode: 'ws',
+      get viewCode() { return viewCode; },
       set: (p, v) => batch([[p, v]]),
       batch,
       ping: d => send({ t: 'ping', data: d }),
@@ -403,11 +411,29 @@
     };
   }
 
-  RP.connect = function (room, handlers, me) {
+  // 편집·보기 링크 주소. 실시간 서버(ws)에서는 보기 링크에 편집 코드 대신 보기 코드를 넣음
+  // 서버 연결 전이라 보기 코드를 아직 모르면 null
+  RP.shareUrl = function ({ room, viewOnly, viewCode, mode }) {
+    const u = new URL(location.href);
+    u.search = '';
+    u.hash = '';
+    if (viewOnly && viewCode) u.searchParams.set('view', viewCode);
+    else if (viewOnly && mode === 'ws') return null;
+    else {
+      u.searchParams.set('room', room);
+      if (viewOnly) u.searchParams.set('mode', 'view');
+    }
+    return u;
+  };
+
+  // opts.view: 보기 코드 링크(?view=)로 열었을 때. 보기 코드는 실시간 서버만 알므로 웹소켓으로만 접속
+  RP.connect = function (room, handlers, me, opts) {
     const cfg = RP.CONFIG || {};
     const mode = cfg.mode || 'auto';
     const fbCfg = cfg.firebase || {};
     const mq = cfg.mqtt || {};
+    const wsUrl = cfg.wsUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    if (opts && opts.view) return wsAdapter(null, handlers, me, wsUrl, null, opts.view);
     const hasMqtt = !!(mq.brokers && mq.brokers.length);
     const fallback = () => hasMqtt ? mqttAdapter(room, handlers, me, mq) : localAdapter(room, handlers, me);
     if (mode === 'firebase' || (mode === 'auto' && fbCfg.databaseURL)) return firebaseAdapter(room, handlers, me, fbCfg);
@@ -417,10 +443,11 @@
 
     // auto: 같은 주소의 실시간 서버(Cloudflare Worker 또는 server.js)를 먼저 쓰고,
     // 한 번도 연결되지 않으면(GitHub Pages 처럼 서버가 없는 곳) 공개 MQTT 중계 서버로 전환
-    const url = cfg.wsUrl || ((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    const url = wsUrl;
     let inner;
     const proxy = {
       mode: 'ws',
+      get viewCode() { return inner.viewCode || null; },
       set: (p, v) => inner.set(p, v),
       batch: ops => inner.batch(ops),
       ping: d => inner.ping(d),

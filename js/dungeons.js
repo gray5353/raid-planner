@@ -22,9 +22,11 @@
 
   // ---------- 작전판 / 모드 ----------
   const params = new URLSearchParams(location.search);
-  const VIEW_ONLY = params.get('mode') === 'view';
-  let room = (params.get('room') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
-  if (!room) {
+  // 보기 링크: ?view=보기코드 (실시간 서버가 수정을 막음). ?room=…&mode=view 는 서버가 없는 방식용 예전 형식
+  const VIEW_CODE = (params.get('view') || '').replace(/[^a-z0-9]/g, '').slice(0, 20);
+  const VIEW_ONLY = !!VIEW_CODE || params.get('mode') === 'view';
+  let room = VIEW_CODE ? '' : (params.get('room') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 40);
+  if (!room && !VIEW_CODE) {
     room = 'd' + RP.uid(9);
     params.set('room', room);
     try { history.replaceState(null, '', location.pathname + '?' + params + location.hash); } catch (e) { /* 샌드박스 */ }
@@ -111,7 +113,7 @@
     },
     onPeers(ps) { peers = Array.isArray(ps) ? ps : []; renderPeers(); },
     onPing() {}
-  }, me);
+  }, me, { view: VIEW_CODE });
 
   function commit(ops) {
     if (!canEdit()) return;
@@ -834,14 +836,13 @@
 
   // ---------- 링크 ----------
   async function copyLink(viewOnly) {
-    const u = new URL(location.href);
-    u.search = '';
-    u.hash = '';
-    u.searchParams.set('room', room);
-    if (viewOnly) u.searchParams.set('mode', 'view');
+    const u = RP.shareUrl({ room, viewOnly, viewCode: VIEW_CODE || sync.viewCode, mode: sync.mode });
+    if (!u) return toast(tr('실시간 서버에 연결된 뒤 다시 눌러 주세요'));
     const s = u.toString();
     const done = sync.mode === 'local' ? tr('링크를 복사했습니다. 다만 지금은 로컬 모드라 다른 사람에게는 보이지 않습니다')
-      : viewOnly ? tr('보기 전용 링크를 복사했습니다') : tr('편집 링크를 복사했습니다');
+      : !viewOnly ? tr('편집 링크를 복사했습니다')
+        : u.searchParams.get('view') ? tr('보기 전용 링크를 복사했습니다')
+          : tr('보기 전용 링크를 복사했습니다. 지금 공유 방식에서는 주소를 고치면 편집할 수 있습니다');
     try { await navigator.clipboard.writeText(s); toast(done); } catch (e) { ask({ title: tr('아래 링크를 복사하세요'), value: s, ok: tr('닫기') }); }
   }
   $('#shareEditBtn').onclick = () => copyLink(false);

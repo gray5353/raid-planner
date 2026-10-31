@@ -311,5 +311,9 @@ window.RP_I18N_EN = {
  "위치: {f}": "Location: {f}",
  "지도 위 번호는 대략적인 위치입니다": "Map positions are approximate",
  "지도: 게임 안 던전 지도 (Blizzard Entertainment). 보스 번호는 지도의 해골 표시와 클래식 공략을 보고 찍은 대략적인 위치입니다.": "Map: in-game dungeon map (Blizzard Entertainment). Boss numbers are approximate, placed from the map's skull markers and Classic guides.",
- "기본 게임 지도로 돌아갑니다.": "The default in-game map will come back."
+ "기본 게임 지도로 돌아갑니다.": "The default in-game map will come back.",
+ "없는 보기 링크입니다. 공대장에게 새 링크를 받아 주세요": "This viewer link doesn't exist. Ask your raid leader for a new one.",
+ "연결할 수 없습니다": "Can't connect",
+ "실시간 서버에 연결된 뒤 다시 눌러 주세요": "Try again once connected to the live server",
+ "보기 전용 링크를 복사했습니다. 지금 공유 방식에서는 주소를 고치면 편집할 수 있습니다": "Viewer link copied. With the current sharing mode, someone who edits the address can still make changes."
 };

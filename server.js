@@ -22,6 +22,28 @@ const MIME = {
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
+// ---------- 보기 코드 ----------
+// 작전판마다 따로 만든 무작위 12자리. 보기 링크(?view=)로는 편집 코드(room)를 알 수 없고, 수정도 받지 않음
+// 파일 이름에 '.' 이 있어 작전판 파일(<room>.json, room 에는 '.' 이 없음)과 겹치지 않음
+const VIEW_RE = /^[a-z2-9]{12}$/;
+const VIEW_FILE = path.join(DATA_DIR, '_views.idx.json');
+let views = {};
+try { views = JSON.parse(fs.readFileSync(VIEW_FILE, 'utf8')) || {}; } catch (e) { views = {}; }
+const viewOf = new Map(Object.entries(views).map(([v, r]) => [r, v]));
+function newCode(n) {
+  const a = 'abcdefghijkmnpqrstuvwxyz23456789';
+  return Array.from(require('crypto').randomBytes(n), x => a[x % a.length]).join('');
+}
+function ensureView(room) {
+  let v = viewOf.get(room);
+  if (v) return v;
+  v = newCode(12);
+  views[v] = room;
+  viewOf.set(room, v);
+  fs.writeFile(VIEW_FILE, JSON.stringify(views), err => { if (err) console.error('보기 코드 저장 실패', err.message); });
+  return v;
+}
+
 // ---------- 정적 파일 ----------
 const server = http.createServer((req, res) => {
   let p;
@@ -103,18 +125,25 @@ wss.on('connection', ws => {
     try { m = JSON.parse(raw); } catch (e) { return; }
     if (!m || typeof m !== 'object') return;
     if (m.t === 'join') {
-      if (!validRoom(m.room) || ws.room) return;
-      const r = getRoom(m.room);
+      if (ws.room) return;
+      let id = m.room;
+      ws.ro = m.view !== undefined;
+      if (ws.ro) {
+        id = VIEW_RE.test(m.view || '') ? views[m.view] : null;
+        if (!id) { send(ws, { t: 'error', code: 'noview' }); ws.close(4404, 'noview'); return; }
+      } else if (!validRoom(id)) return;
+      const r = getRoom(id);
       ws.room = r;
       ws.me = cleanMe(m.me);
       r.clients.add(ws);
-      send(ws, { t: 'snapshot', state: r.state });
+      send(ws, ws.ro ? { t: 'snapshot', state: r.state, readonly: true } : { t: 'snapshot', state: r.state, view: ensureView(id) });
       broadcastPeers(r);
       return;
     }
     const r = ws.room;
     if (!r) return;
     if (m.t === 'batch' && Array.isArray(m.ops)) {
+      if (ws.ro) return; // 보기 링크로 들어온 사람의 수정은 받지 않음
       const ops = m.ops.filter(op => Array.isArray(op) && validPath(op[0])).slice(0, 500);
       if (!ops.length) return;
       ops.forEach(([p, v]) => applyOp(r.state, p, v));
