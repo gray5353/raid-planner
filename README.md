@@ -21,6 +21,16 @@ WoW: Forever 공격대 브리핑 앱
 보스별 지형 위에 공대원·징표를 끌어다 놓고, 그림판처럼 그려서 공격대에게 설명하는 웹 앱입니다.
 같은 주소를 연 사람들 화면에 실시간으로 똑같이 보입니다.
 
+## 펫 도감 (`pets.html`)
+
+사냥꾼이 길들일 수 있는 야수 529종(17가지 종류)을 종류·지역·내 레벨로 골라 보고, 지역 지도에서 출몰 위치를 봅니다.
+
+- 종류별 배우는 기술·먹이·능력치, 야수별 레벨·등급(희귀/정예)·공격 속도(빠른 야수는 초록)·특수 피해(예: 루포스 암흑 피해)
+- 지역 지도(게임 안 지도 40곳) 위 출몰 지점, 같은 종류 야수도 함께 표시, 휠 확대·끌어서 이동, 던전 안 야수는 던전 도감으로 연결
+- 주소에 종류·야수·지역이 남아 **링크 복사**로 그대로 공유 (실시간 공유는 없음)
+- 3D 모델 자리: 게임 폴더에서 꺼낸 `.glb` 를 `js/pet-models.js` 에 적으면 돌려 볼 수 있음 (지금은 모델 없음)
+- 자료는 클래식 기준 (CMaNGOS classic-db, QuestieDB). 만드는 방법과 출처는 [tools/pets/README.md](tools/pets/README.md)
+
 ## 할 수 있는 것
 
 | 기능 | 설명 |
@@ -146,6 +156,10 @@ js/sync.js      실시간 동기화 (Firebase / 웹소켓 / 로컬)
 js/app.js       앱 동작
 dungeons.html   던전 도감 (js/dungeons.js, js/dungeon-data.js, js/dungeon-maps.js, css/dungeons.css)
 assets/maps/    던전 지도 그림 (<던전>-<층>.jpg)
+pets.html       펫 도감 (js/pets.js, js/pet-data.js, js/pet-models.js, css/pets.css)
+assets/zones/   지역 지도 그림 · assets/pets/ 펫 아이콘(과 3D 모델)
+js/vendor/three three.js (MIT, 3D 모델이 있을 때만 불러옴)
+tools/pets/     펫 도감 자료 만드는 스크립트 (웹에 공개하지 않음)
 server.js       Node 실시간 서버 (직접 서버를 운영할 때)
 worker/index.js Cloudflare Workers 실시간 서버 (Durable Objects)
 wrangler.toml   Cloudflare 배포 설정 · .assetsignore 는 공개하지 않을 파일 목록

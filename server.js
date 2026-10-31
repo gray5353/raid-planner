@@ -12,7 +12,7 @@ const { WebSocketServer } = require('ws');
 const PORT = Number(process.env.PORT) || 8080;
 const ROOT = __dirname;
 const DATA_DIR = process.env.DATA_DIR || path.join(ROOT, 'data');
-const PUBLIC = new Set(['/index.html', '/dungeons.html']);
+const PUBLIC = new Set(['/index.html', '/dungeons.html', '/pets.html']);
 const PUBLIC_DIRS = ['/css/', '/js/', '/assets/'];
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',

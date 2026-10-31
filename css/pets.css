@@ -1,0 +1,147 @@
+/* 펫 도감 (style.css 의 색·버튼을 함께 씀) */
+.pets-top { gap: 14px; }
+.pets-brand { display: flex; align-items: center; gap: 10px; flex: 1 1 300px; min-width: 0; }
+.pets-brand .brand-ico { width: 32px; height: 32px; border-radius: 6px; border: 1px solid #5b4a26; }
+.pets-brand h1 { margin: 0; font-size: 18px; font-weight: 800; color: var(--gold); white-space: nowrap; }
+.pets-sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+.pets { flex: 1; min-height: 0; display: grid; grid-template-columns: 236px minmax(0, 1fr) minmax(380px, 500px); }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; user-select: none; }
+.chk input { accent-color: var(--gold); width: 15px; height: 15px; }
+
+/* 왼쪽: 종류 */
+.fam-side { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: #121419; }
+.fam-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 12px 10px; border-bottom: 1px solid var(--line); }
+.fam-filter .lv { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.fam-filter .lv input { width: 72px; text-align: center; font-variant-numeric: tabular-nums; }
+.fam-filter .chk { white-space: nowrap; }
+.fam-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; display: grid; align-content: start; gap: 2px; }
+.fam-list button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; text-align: left; cursor: pointer;
+  background: none; border: 0; border-left: 3px solid transparent; border-radius: 6px; color: var(--text);
+}
+.fam-list button:hover { background: var(--panel-2); }
+.fam-list button[aria-current="true"] { background: #231f15; border-left-color: var(--gold); color: var(--gold); }
+.fam-list img, .fam-list .all-ico { width: 30px; height: 30px; border-radius: 5px; flex: none; border: 1px solid #3a3426; }
+.fam-list .all-ico { display: grid; place-items: center; font-size: 15px; background: var(--panel-2); color: var(--gold); }
+.fam-list .fl-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.fam-list .fl-name small { color: var(--muted); font-size: 11px; }
+.fam-list .fl-n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 가운데: 종류 정보 + 야수 목록 */
+.pets-main { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; padding: 12px 14px; }
+.fam-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.fam-card .fc-ico { grid-row: span 2; width: 56px; height: 56px; border-radius: 8px; border: 1px solid #5b4a26; }
+.fam-card .fc-ico.all { display: grid; place-items: center; font-size: 26px; color: var(--gold); background: var(--panel-2); }
+.fam-card h2 { margin: 0; font-size: 22px; font-weight: 800; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.fam-card h2 small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.fc-rows { display: grid; gap: 6px; font-size: 13px; }
+.fc-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fc-row > b { color: var(--muted); font-weight: 500; min-width: 56px; }
+.chip { display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 9px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
+.chip small { color: var(--muted); font-size: 11px; }
+.chip.skill { border-color: #5b4a26; color: #f2d48f; }
+.chip.food { border-color: #33503a; color: #a8dcb2; }
+.stat-up { color: var(--ok); }
+.stat-down { color: #ff8c84; }
+
+.beast-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.beast-tools input[type="search"] { flex: 1 1 180px; }
+.beast-tools select { flex: 0 1 auto; max-width: 220px; }
+.beast-count { color: var(--muted); font-size: 13px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.beast-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.beasts { width: 100%; border-collapse: collapse; font-size: 13px; }
+.beasts th {
+  position: sticky; top: 0; z-index: 1; text-align: left; font-weight: 600; font-size: 12px; color: var(--muted);
+  padding: 8px 10px; background: #1a1d24; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.beasts td { padding: 7px 10px; border-bottom: 1px solid #22262f; vertical-align: middle; }
+.beasts tbody tr { cursor: pointer; }
+.beasts tbody tr:hover { background: #1c2028; }
+.beasts tbody tr[aria-selected="true"] { background: #2a2416; box-shadow: inset 3px 0 0 var(--gold); }
+.beasts tbody tr.over { opacity: .45; }
+.beasts .b-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.beasts .b-name img { width: 22px; height: 22px; border-radius: 4px; flex: none; }
+.beasts .b-name span { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.beasts .b-name small { color: var(--muted); font-size: 11px; }
+.beasts .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.beasts .fast { color: var(--ok); font-weight: 700; }
+.beasts .zone small { color: var(--muted); }
+.beasts .empty { padding: 28px; text-align: center; color: var(--muted); cursor: default; }
+.tag { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 11px; line-height: 18px; white-space: nowrap; margin: 1px 4px 1px 0; }
+.tag.rare { background: #3b3f4a; color: #e3e7ef; border: 1px solid #8f99ab; }
+.tag.elite { background: #3d2f12; color: #f2d48f; border: 1px solid #8a6b2c; }
+.tag.school { background: #2b2140; color: #cdb6ff; border: 1px solid #5d4a8f; }
+.tag.over { background: none; color: #ff8c84; border: 1px solid #6b3330; }
+
+/* 오른쪽: 고른 야수 */
+.beast-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow-y: auto; padding: 14px 16px 22px; border-left: 1px solid var(--line); background: #121419; }
+.beast-side > * { flex-shrink: 0; }
+.beast-head h2 { margin: 0; font-size: 24px; font-weight: 800; text-wrap: balance; }
+.beast-head .bh-sub { color: var(--muted); font-size: 13px; }
+.beast-head .bh-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.beast-head .fact { padding: 3px 9px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12px; }
+.beast-head .fact b { color: var(--gold); font-variant-numeric: tabular-nums; }
+.beast-head .fact.fast b { color: var(--ok); }
+
+.model-box { position: relative; height: 220px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #2a2619, #121212 75%); }
+.model-box canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.model-box .mb-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; padding: 14px; color: var(--muted); font-size: 13px; }
+.model-box .mb-empty img { width: 64px; height: 64px; border-radius: 10px; border: 1px solid #5b4a26; opacity: .9; }
+.model-box .mb-empty b { color: var(--text); font-size: 14px; }
+.model-box .mb-label { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--muted); pointer-events: none; }
+
+.zone-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.zone-tabs:empty { display: none; }
+.zone-tabs button {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; cursor: pointer; font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line); color: var(--text);
+}
+.zone-tabs button[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); font-weight: 700; }
+.zone-tabs .zt-n { font-size: 11px; opacity: .75; font-variant-numeric: tabular-nums; }
+
+.zmap { position: relative; aspect-ratio: 1002 / 668; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #121212; flex: none; cursor: grab; touch-action: none; }
+.zmap.panning { cursor: grabbing; }
+.zstage { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; --inv: 1; }
+.zstage img { width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+.zpins { position: absolute; inset: 0; }
+.zpin {
+  position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; padding: 0; cursor: pointer;
+  background: #c9ced8; border: 1px solid rgba(0,0,0,.65); opacity: .6; transform: scale(var(--inv));
+}
+.zpin.me { width: 14px; height: 14px; margin: -7px 0 0 -7px; background: var(--gold); border: 2px solid #1b1406; opacity: 1; z-index: 2;
+  box-shadow: 0 0 0 2px rgba(226,179,86,.35), 0 0 10px rgba(226,179,86,.7); }
+.zpin:hover { opacity: 1; z-index: 3; }
+.zdungeon { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; text-align: center; padding: 18px;
+  background: radial-gradient(circle at 50% 45%, #2a261d, #121212 75%); color: var(--muted); cursor: default; }
+.zdungeon b { color: var(--text); font-size: 15px; }
+.zdungeon[hidden], .zstage[hidden] { display: none; }
+.zmap-zoom { position: absolute; right: 8px; top: 8px; display: flex; gap: 4px; }
+.zmap-zoom .btn { background: rgba(22,25,32,.88); }
+.zmap-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.zmap-note { color: var(--muted); font-size: 12px; }
+
+.pets-info { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.6; }
+.pets-info h3 { margin: 0 0 6px; font-size: 13px; color: var(--text); }
+.pets-info p { margin: 0 0 6px; }
+.pets-info a { color: var(--gold); }
+
+@media (max-width: 1280px) {
+  .pets { grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); overflow-y: auto; }
+  .beast-side { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .pets-main { min-height: 560px; }
+}
+@media (max-width: 760px) {
+  body.pets-page { overflow: auto; height: auto; }
+  .pets { display: block; }
+  .fam-side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .fam-list { display: flex; overflow-x: auto; padding: 6px 10px; }
+  .fam-list button { flex: none; width: auto; border-left: 0; border-bottom: 3px solid transparent; }
+  .fam-list button[aria-current="true"] { border-bottom-color: var(--gold); }
+  .fam-list .fl-name small, .fam-list .fl-n { display: none; }
+  .pets-main { padding: 10px; min-height: 0; }
+  .beast-wrap { max-height: 60vh; }
+  .pets-sub { display: none; }
+  .beasts .col-speed, .beasts .col-fam { display: none; }
+}

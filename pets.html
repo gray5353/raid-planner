@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>펫 도감 · 브리핑 포에버</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/pets.css">
+<script>
+  // 화면이 그려지기 전에 언어를 정함 (브리핑 포에버와 같은 설정 공유)
+  (function () {
+    var l = 'ko';
+    try { l = localStorage.getItem('rp-lang') || ((navigator.language || '').toLowerCase().indexOf('ko') === 0 ? 'ko' : 'en'); } catch (e) {}
+    if (l !== 'en') l = 'ko';
+    document.documentElement.lang = l;
+    document.documentElement.classList.add('lang-' + l);
+  })();
+</script>
+</head>
+<body class="pets-page">
+<header class="topbar pets-top">
+  <div class="pets-brand">
+    <img src="assets/pets/icons/wolf.png" alt="" class="brand-ico" width="32" height="32">
+    <h1>펫 도감</h1>
+    <span class="pets-sub">사냥꾼 야수 길들이기 · 클래식 기준</span>
+  </div>
+  <div class="actions">
+    <button type="button" class="btn" id="copyLinkBtn" title="지금 보고 있는 야수로 바로 열리는 주소">링크 복사</button>
+    <a class="btn" href="dungeons.html" title="던전 지도·공략 앱으로">던전 도감</a>
+    <a class="btn" href="index.html" title="공격대 브리핑 앱으로">브리핑 포에버</a>
+    <div class="lang-toggle" id="langToggle" role="group" aria-label="Language">
+      <button type="button" data-lang="ko" lang="ko">KR</button><button type="button" data-lang="en" lang="en">EN</button>
+    </div>
+  </div>
+</header>
+
+<main class="pets">
+  <aside class="fam-side">
+    <div class="fam-filter">
+      <label class="lv">내 레벨 <input id="myLevel" type="number" min="1" max="60" inputmode="numeric" placeholder="1–60"></label>
+      <label class="chk"><input type="checkbox" id="onlyRare"> 희귀만</label>
+    </div>
+    <nav class="fam-list" id="famList" aria-label="야수 종류"></nav>
+  </aside>
+
+  <section class="pets-main">
+    <div class="fam-card" id="famCard"></div>
+    <div class="beast-tools">
+      <input id="beastSearch" type="search" placeholder="야수 이름 검색" aria-label="야수 이름 검색">
+      <select id="zoneFilter" aria-label="지역"></select>
+      <select id="sortBy" aria-label="정렬">
+        <option value="lvl">레벨순</option>
+        <option value="name">이름순</option>
+        <option value="speed">공격 속도순</option>
+      </select>
+      <span class="beast-count" id="beastCount"></span>
+    </div>
+    <div class="beast-wrap"><table class="beasts" id="beastTable"></table></div>
+  </section>
+
+  <aside class="beast-side">
+    <div class="beast-head" id="beastHead"></div>
+    <div class="model-box" id="modelBox"></div>
+    <div class="zone-tabs" id="zoneTabs"></div>
+    <div class="zmap" id="zmap">
+      <div class="zstage" id="zstage">
+        <img id="zimg" alt="" draggable="false">
+        <div class="zpins" id="zpins"></div>
+      </div>
+      <div class="zdungeon" id="zdungeon" hidden></div>
+      <div class="zoom zmap-zoom">
+        <button type="button" class="btn small" id="zOut" title="축소" aria-label="축소">−</button>
+        <button type="button" class="btn small" id="zReset" title="화면에 맞춤">100%</button>
+        <button type="button" class="btn small" id="zIn" title="확대" aria-label="확대">+</button>
+      </div>
+    </div>
+    <div class="zmap-foot">
+      <label class="chk"><input type="checkbox" id="showFamily" checked> 같은 종류 야수도 표시</label>
+      <span class="zmap-note" id="zmapNote"></span>
+    </div>
+    <section class="pets-info" id="petsInfo"></section>
+  </aside>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script src="js/i18n-en.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/pet-data.js"></script>
+<script src="js/pet-models.js"></script>
+<script src="js/pets.js"></script>
+</body>
+</html>

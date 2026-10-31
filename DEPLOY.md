@@ -9,6 +9,7 @@
 |---|---|
 | 앱 | 브리핑 포에버 (Briefing Forever). WoW: Forever 공격대 브리핑 웹앱. 지도 위에 공대원·보스를 놓고 그리면 같은 주소를 연 사람들에게 실시간으로 보임 |
 | 함께 들어 있는 앱 | **던전 도감** `dungeons.html` (Cloudflare 에서는 `/dungeons`). 던전 선택, 지도·보스 위치, 공략, 획득 아이템, 그리기, 같은 실시간 공유 |
+| | **펫 도감** `pets.html` (`/pets`). 사냥꾼이 길들일 수 있는 야수, 지역 지도 위 출몰 위치. 서버 없이 동작(실시간 공유 없음) |
 | 저장소 | <https://github.com/gray5353/raid-planner> (공개), 배포 브랜치 `main` |
 | 지금 운영 중 | GitHub Pages <https://gray5353.github.io/raid-planner/> (실시간은 공개 MQTT 중계 서버로 동작) |
 | 목표 | Cloudflare **Workers** 로 배포 → 실시간을 우리 전용 서버(Durable Objects)로 |
@@ -21,6 +22,9 @@
 index.html, css/, js/   브리핑 화면 (정적 파일, 빌드 과정 없음)
 dungeons.html           던전 도감 화면 (js/dungeons.js, js/dungeon-data.js, js/dungeon-maps.js, css/dungeons.css)
 assets/maps/            던전 지도 그림 44장 (약 5.6MB, 보는 층만 내려받음)
+pets.html               펫 도감 화면 (js/pets.js, js/pet-data.js, js/pet-models.js, css/pets.css)
+assets/zones/           지역 지도 그림 40장 (약 6.4MB) · js/vendor/three/ three.js (3D 모델이 있을 때만)
+tools/                  자료 만드는 스크립트 (.assetsignore 로 웹에 공개하지 않음)
 worker/index.js         Cloudflare Worker
                           /ws?room=<작전판>  → 작전판마다 Durable Object(Room) 하나가 웹소켓 접속을 받음
                           그 밖의 경로       → 정적 파일 (Workers Assets)
@@ -96,6 +100,8 @@ npx wrangler deploy
    |---|---|
    | `/` | 200 (앱 화면) |
    | `/dungeons` | 200 (던전 도감. `/dungeons.html` 은 여기로 307 이동) |
+   | `/pets` | 200 (펫 도감) |
+   | `/tools/pets/build.py` | 404 (공개되면 안 됨) |
    | `/server.js`, `/wrangler.toml`, `/DEPLOY.md` | 404 (공개되면 안 됨) |
    | `/ws?room=test` (그냥 열기) | 426 "WebSocket only" |
 
