@@ -106,12 +106,13 @@ npm start          # http://localhost:8080
 앱을 올린 주소를 페이지에 iframe 으로 넣으면 됩니다.
 
 ```html
-<iframe src="https://내사이트/raid-planner/?room=우리공대"
+<iframe src="https://내사이트/raid-planner/?room=our-raid-x7k2"
         style="width:100%;height:900px;border:0"
         allow="clipboard-write; fullscreen"></iframe>
 ```
 
 `room` 값이 같으면 같은 작전판입니다. 비워 두면 새 작전판이 만들어지고 주소에 붙습니다.
+`room` 은 영문·숫자·`-`·`_` 만 됩니다 (한글은 지워져서 매번 새 작전판이 됨). 남이 짐작하기 어렵게 정하세요.
 공대원에게는 `&mode=view` 가 붙은 **보기 링크**를 주세요.
 
 ## 보스 지형 이미지 얻기

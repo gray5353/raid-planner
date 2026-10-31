@@ -76,12 +76,13 @@ npx wrangler deploy
 ## 기존 사이트에 넣기
 
 ```html
-<iframe src="https://briefing.example.com/?room=우리공대"
+<iframe src="https://briefing.example.com/?room=our-raid-x7k2"
         style="width:100%;height:900px;border:0"
         allow="clipboard-write; fullscreen"></iframe>
 ```
 
 - `room` 값이 같으면 같은 작전판. 비우면 새 작전판이 만들어지고 주소에 붙습니다.
+- `room` 은 영문·숫자·`-`·`_` 만 (최대 40자). 한글은 지워져서 매번 새 작전판이 되니 쓰지 말 것. 남이 짐작하기 어려운 값으로.
 - 늘 같은 작전판을 열고 싶으면 `js/config.js` 의 `defaultRoom` 에 이름을 넣어도 됩니다.
 - 공대원에게는 주소 끝에 `&mode=view` 가 붙은 **보기 링크**를 줍니다 (앱 상단 "보기 링크" 버튼).
 
